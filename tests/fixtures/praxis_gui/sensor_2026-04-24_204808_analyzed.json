@@ -1,0 +1,584 @@
+{
+  "rolling_rmssd": [
+    {
+      "t_s": 29.439,
+      "rmssd": 69.5
+    },
+    {
+      "t_s": 30.462,
+      "rmssd": 69.4
+    },
+    {
+      "t_s": 31.448,
+      "rmssd": 69.1
+    },
+    {
+      "t_s": 32.469,
+      "rmssd": 69.3
+    },
+    {
+      "t_s": 33.441,
+      "rmssd": 71.9
+    },
+    {
+      "t_s": 34.508,
+      "rmssd": 71.7
+    },
+    {
+      "t_s": 35.431,
+      "rmssd": 72.1
+    },
+    {
+      "t_s": 36.466,
+      "rmssd": 72.2
+    },
+    {
+      "t_s": 37.442,
+      "rmssd": 71.4
+    },
+    {
+      "t_s": 38.461,
+      "rmssd": 71.3
+    },
+    {
+      "t_s": 39.467,
+      "rmssd": 59.2
+    },
+    {
+      "t_s": 40.453,
+      "rmssd": 59.1
+    },
+    {
+      "t_s": 41.442,
+      "rmssd": 59.4
+    },
+    {
+      "t_s": 42.464,
+      "rmssd": 59.4
+    },
+    {
+      "t_s": 43.435,
+      "rmssd": 64.3
+    },
+    {
+      "t_s": 44.483,
+      "rmssd": 64.6
+    },
+    {
+      "t_s": 46.462,
+      "rmssd": 57.0
+    },
+    {
+      "t_s": 47.436,
+      "rmssd": 57.3
+    },
+    {
+      "t_s": 48.455,
+      "rmssd": 58.0
+    },
+    {
+      "t_s": 49.437,
+      "rmssd": 54.9
+    },
+    {
+      "t_s": 50.458,
+      "rmssd": 50.4
+    },
+    {
+      "t_s": 51.484,
+      "rmssd": 50.8
+    },
+    {
+      "t_s": 52.459,
+      "rmssd": 51.6
+    },
+    {
+      "t_s": 53.502,
+      "rmssd": 52.2
+    },
+    {
+      "t_s": 54.458,
+      "rmssd": 51.6
+    },
+    {
+      "t_s": 55.53,
+      "rmssd": 50.5
+    },
+    {
+      "t_s": 56.456,
+      "rmssd": 50.2
+    },
+    {
+      "t_s": 57.476,
+      "rmssd": 52.6
+    },
+    {
+      "t_s": 58.449,
+      "rmssd": 50.5
+    },
+    {
+      "t_s": 59.471,
+      "rmssd": 49.0
+    },
+    {
+      "t_s": 60.443,
+      "rmssd": 50.1
+    },
+    {
+      "t_s": 61.48,
+      "rmssd": 52.5
+    },
+    {
+      "t_s": 62.472,
+      "rmssd": 52.8
+    },
+    {
+      "t_s": 63.479,
+      "rmssd": 49.3
+    },
+    {
+      "t_s": 64.441,
+      "rmssd": 49.6
+    },
+    {
+      "t_s": 65.476,
+      "rmssd": 49.6
+    },
+    {
+      "t_s": 66.452,
+      "rmssd": 51.4
+    },
+    {
+      "t_s": 67.513,
+      "rmssd": 51.5
+    },
+    {
+      "t_s": 68.501,
+      "rmssd": 51.5
+    },
+    {
+      "t_s": 69.474,
+      "rmssd": 51.5
+    },
+    {
+      "t_s": 70.449,
+      "rmssd": 52.7
+    },
+    {
+      "t_s": 71.463,
+      "rmssd": 52.4
+    },
+    {
+      "t_s": 72.447,
+      "rmssd": 52.5
+    },
+    {
+      "t_s": 73.469,
+      "rmssd": 46.6
+    },
+    {
+      "t_s": 74.442,
+      "rmssd": 47.7
+    },
+    {
+      "t_s": 75.475,
+      "rmssd": 48.2
+    },
+    {
+      "t_s": 76.442,
+      "rmssd": 48.0
+    },
+    {
+      "t_s": 77.459,
+      "rmssd": 47.7
+    },
+    {
+      "t_s": 78.433,
+      "rmssd": 51.1
+    },
+    {
+      "t_s": 79.484,
+      "rmssd": 52.2
+    },
+    {
+      "t_s": 80.454,
+      "rmssd": 51.4
+    },
+    {
+      "t_s": 81.455,
+      "rmssd": 50.6
+    },
+    {
+      "t_s": 82.436,
+      "rmssd": 49.9
+    },
+    {
+      "t_s": 83.455,
+      "rmssd": 49.8
+    },
+    {
+      "t_s": 84.437,
+      "rmssd": 56.6
+    },
+    {
+      "t_s": 85.454,
+      "rmssd": 56.6
+    },
+    {
+      "t_s": 86.488,
+      "rmssd": 54.0
+    },
+    {
+      "t_s": 87.463,
+      "rmssd": 54.5
+    },
+    {
+      "t_s": 88.424,
+      "rmssd": 55.7
+    },
+    {
+      "t_s": 89.45,
+      "rmssd": 55.9
+    },
+    {
+      "t_s": 90.424,
+      "rmssd": 53.7
+    },
+    {
+      "t_s": 91.455,
+      "rmssd": 53.5
+    },
+    {
+      "t_s": 92.481,
+      "rmssd": 53.9
+    },
+    {
+      "t_s": 93.459,
+      "rmssd": 53.8
+    },
+    {
+      "t_s": 94.47,
+      "rmssd": 53.2
+    },
+    {
+      "t_s": 95.458,
+      "rmssd": 51.0
+    },
+    {
+      "t_s": 96.474,
+      "rmssd": 51.0
+    },
+    {
+      "t_s": 97.457,
+      "rmssd": 50.8
+    },
+    {
+      "t_s": 98.471,
+      "rmssd": 49.9
+    },
+    {
+      "t_s": 99.466,
+      "rmssd": 48.4
+    },
+    {
+      "t_s": 100.48,
+      "rmssd": 49.5
+    },
+    {
+      "t_s": 101.503,
+      "rmssd": 50.9
+    },
+    {
+      "t_s": 102.466,
+      "rmssd": 51.2
+    },
+    {
+      "t_s": 103.455,
+      "rmssd": 49.9
+    },
+    {
+      "t_s": 104.49,
+      "rmssd": 49.4
+    },
+    {
+      "t_s": 105.454,
+      "rmssd": 50.5
+    },
+    {
+      "t_s": 106.476,
+      "rmssd": 51.4
+    },
+    {
+      "t_s": 107.45,
+      "rmssd": 47.6
+    },
+    {
+      "t_s": 108.47,
+      "rmssd": 47.5
+    },
+    {
+      "t_s": 109.451,
+      "rmssd": 48.5
+    },
+    {
+      "t_s": 110.474,
+      "rmssd": 48.8
+    },
+    {
+      "t_s": 111.448,
+      "rmssd": 48.9
+    },
+    {
+      "t_s": 112.466,
+      "rmssd": 50.2
+    },
+    {
+      "t_s": 113.45,
+      "rmssd": 44.6
+    },
+    {
+      "t_s": 114.472,
+      "rmssd": 44.5
+    },
+    {
+      "t_s": 115.448,
+      "rmssd": 44.8
+    },
+    {
+      "t_s": 116.472,
+      "rmssd": 45.8
+    },
+    {
+      "t_s": 117.456,
+      "rmssd": 46.1
+    },
+    {
+      "t_s": 118.471,
+      "rmssd": 45.9
+    },
+    {
+      "t_s": 119.444,
+      "rmssd": 46.1
+    },
+    {
+      "t_s": 120.457,
+      "rmssd": 49.8
+    },
+    {
+      "t_s": 121.431,
+      "rmssd": 50.3
+    },
+    {
+      "t_s": 122.455,
+      "rmssd": 51.0
+    },
+    {
+      "t_s": 123.443,
+      "rmssd": 51.0
+    },
+    {
+      "t_s": 124.466,
+      "rmssd": 51.4
+    },
+    {
+      "t_s": 125.441,
+      "rmssd": 51.9
+    }
+  ],
+  "neurokit2_hrv_rr": {
+    "HRV_MeanNN": 914.758,
+    "HRV_SDNN": 78.737,
+    "HRV_SDANN1": null,
+    "HRV_SDNNI1": null,
+    "HRV_SDANN2": null,
+    "HRV_SDNNI2": null,
+    "HRV_SDANN5": null,
+    "HRV_SDNNI5": null,
+    "HRV_RMSSD": 56.002,
+    "HRV_SDSD": 56.231,
+    "HRV_CVNN": 0.086,
+    "HRV_CVSD": 0.061,
+    "HRV_MedianNN": 916.0,
+    "HRV_MadNN": 91.18,
+    "HRV_MCVNN": 0.1,
+    "HRV_IQRNN": 121.25,
+    "HRV_SDRMSSD": 1.406,
+    "HRV_Prc20NN": 833.2,
+    "HRV_Prc80NN": 994.0,
+    "HRV_pNN50": 33.871,
+    "HRV_pNN20": 76.613,
+    "HRV_MinNN": 772.0,
+    "HRV_MaxNN": 1095.0,
+    "HRV_HTI": 15.5,
+    "HRV_TINN": 203.125,
+    "HRV_ULF": null,
+    "HRV_VLF": null,
+    "HRV_LF": 0.031,
+    "HRV_HF": 0.004,
+    "HRV_VHF": 0.0,
+    "HRV_TP": 0.036,
+    "HRV_LFHF": 6.999,
+    "HRV_LFn": 0.87,
+    "HRV_HFn": 0.124,
+    "HRV_LnHF": -5.414,
+    "HRV_SD1": 39.761,
+    "HRV_SD2": 104.462,
+    "HRV_SD1SD2": 0.381,
+    "HRV_S": 13048.741,
+    "HRV_CSI": 2.627,
+    "HRV_CVI": 4.823,
+    "HRV_CSI_Modified": 1097.794,
+    "HRV_PIP": 0.315,
+    "HRV_IALS": 0.32,
+    "HRV_PSS": 0.282,
+    "HRV_PAS": 0.0,
+    "HRV_GI": 49.807,
+    "HRV_SI": 49.789,
+    "HRV_AI": 49.829,
+    "HRV_PI": 56.557,
+    "HRV_C1d": 0.574,
+    "HRV_C1a": 0.426,
+    "HRV_SD1d": 30.116,
+    "HRV_SD1a": 25.961,
+    "HRV_C2d": 0.445,
+    "HRV_C2a": 0.555,
+    "HRV_SD2d": 69.701,
+    "HRV_SD2a": 77.808,
+    "HRV_Cd": 0.461,
+    "HRV_Ca": 0.539,
+    "HRV_SDNNd": 53.69,
+    "HRV_SDNNa": 58.0,
+    "HRV_DFA_alpha1": 1.289,
+    "HRV_MFDFA_alpha1_Width": 2.132,
+    "HRV_MFDFA_alpha1_Peak": 1.636,
+    "HRV_MFDFA_alpha1_Mean": 1.961,
+    "HRV_MFDFA_alpha1_Max": -1.236,
+    "HRV_MFDFA_alpha1_Delta": -1.305,
+    "HRV_MFDFA_alpha1_Asymmetry": -0.348,
+    "HRV_MFDFA_alpha1_Fluctuation": 0.001,
+    "HRV_MFDFA_alpha1_Increment": 0.273,
+    "HRV_ApEn": 0.755,
+    "HRV_SampEn": 1.38,
+    "HRV_ShanEn": 6.619,
+    "HRV_FuzzyEn": 1.098,
+    "HRV_MSEn": 1.436,
+    "HRV_CMSEn": 1.206,
+    "HRV_RCMSEn": 1.517,
+    "HRV_CD": 1.936,
+    "HRV_HFD": 1.847,
+    "HRV_KFD": 3.324,
+    "HRV_LZC": 0.729,
+    "HRV_Symbolic_EqualProb4_0V": 0.287,
+    "HRV_Symbolic_EqualProb4_1V": 0.467,
+    "HRV_Symbolic_EqualProb4_2LV": 0.197,
+    "HRV_Symbolic_EqualProb4_2UV": 0.049
+  },
+  "neurokit2_hrv_ecg": {
+    "HRV_MeanNN": 911.623,
+    "HRV_SDNN": 77.549,
+    "HRV_SDANN1": null,
+    "HRV_SDNNI1": null,
+    "HRV_SDANN2": null,
+    "HRV_SDNNI2": null,
+    "HRV_SDANN5": null,
+    "HRV_SDNNI5": null,
+    "HRV_RMSSD": 50.854,
+    "HRV_SDSD": 51.042,
+    "HRV_CVNN": 0.085,
+    "HRV_CVSD": 0.056,
+    "HRV_MedianNN": 900.0,
+    "HRV_MadNN": 91.237,
+    "HRV_MCVNN": 0.101,
+    "HRV_IQRNN": 123.077,
+    "HRV_SDRMSSD": 1.525,
+    "HRV_Prc20NN": 838.462,
+    "HRV_Prc80NN": 984.615,
+    "HRV_pNN50": 27.737,
+    "HRV_pNN20": 78.832,
+    "HRV_MinNN": 769.231,
+    "HRV_MaxNN": 1092.308,
+    "HRV_HTI": 15.222,
+    "HRV_TINN": 203.125,
+    "HRV_ULF": null,
+    "HRV_VLF": null,
+    "HRV_LF": 0.04,
+    "HRV_HF": 0.005,
+    "HRV_VHF": 0.0,
+    "HRV_TP": 0.045,
+    "HRV_LFHF": 7.853,
+    "HRV_LFn": 0.885,
+    "HRV_HFn": 0.113,
+    "HRV_LnHF": -5.288,
+    "HRV_SD1": 36.092,
+    "HRV_SD2": 103.935,
+    "HRV_SD1SD2": 0.347,
+    "HRV_S": 11784.813,
+    "HRV_CSI": 2.88,
+    "HRV_CVI": 4.778,
+    "HRV_CSI_Modified": 1197.199,
+    "HRV_PIP": 0.336,
+    "HRV_IALS": 0.318,
+    "HRV_PSS": 0.341,
+    "HRV_PAS": 0.0,
+    "HRV_GI": 50.139,
+    "HRV_SI": 50.115,
+    "HRV_AI": 50.164,
+    "HRV_PI": 60.465,
+    "HRV_C1d": 0.641,
+    "HRV_C1a": 0.359,
+    "HRV_SD1d": 28.888,
+    "HRV_SD1a": 21.636,
+    "HRV_C2d": 0.419,
+    "HRV_C2a": 0.581,
+    "HRV_SD2d": 67.288,
+    "HRV_SD2a": 79.213,
+    "HRV_Cd": 0.443,
+    "HRV_Ca": 0.557,
+    "HRV_SDNNd": 51.78,
+    "HRV_SDNNa": 58.064,
+    "HRV_DFA_alpha1": 1.439,
+    "HRV_MFDFA_alpha1_Width": 1.706,
+    "HRV_MFDFA_alpha1_Peak": 1.669,
+    "HRV_MFDFA_alpha1_Mean": 1.848,
+    "HRV_MFDFA_alpha1_Max": -0.875,
+    "HRV_MFDFA_alpha1_Delta": -0.704,
+    "HRV_MFDFA_alpha1_Asymmetry": -0.395,
+    "HRV_MFDFA_alpha1_Fluctuation": 0.0,
+    "HRV_MFDFA_alpha1_Increment": 0.136,
+    "HRV_DFA_alpha2": 0.614,
+    "HRV_MFDFA_alpha2_Width": 2.895,
+    "HRV_MFDFA_alpha2_Peak": 0.915,
+    "HRV_MFDFA_alpha2_Mean": 1.445,
+    "HRV_MFDFA_alpha2_Max": -3.702,
+    "HRV_MFDFA_alpha2_Delta": -3.179,
+    "HRV_MFDFA_alpha2_Asymmetry": -0.317,
+    "HRV_MFDFA_alpha2_Fluctuation": 0.0,
+    "HRV_MFDFA_alpha2_Increment": 0.329,
+    "HRV_ApEn": 0.79,
+    "HRV_SampEn": 1.001,
+    "HRV_ShanEn": 5.036,
+    "HRV_FuzzyEn": 0.99,
+    "HRV_MSEn": 1.392,
+    "HRV_CMSEn": 1.129,
+    "HRV_RCMSEn": 1.545,
+    "HRV_CD": 1.977,
+    "HRV_HFD": 1.801,
+    "HRV_KFD": 2.954,
+    "HRV_LZC": 0.829,
+    "HRV_Symbolic_EqualProb4_0V": 0.281,
+    "HRV_Symbolic_EqualProb4_1V": 0.481,
+    "HRV_Symbolic_EqualProb4_2LV": 0.193,
+    "HRV_Symbolic_EqualProb4_2UV": 0.044
+  },
+  "ecg_qualitaet": {
+    "mean_quality": 0.699,
+    "min_quality": 0.0,
+    "pct_good": 0.798
+  },
+  "ecg_morphologie": {
+    "n_beats_analyzed": 138,
+    "mean_pr_ms": 87.285,
+    "mean_qrs_ms": 83.49,
+    "mean_qt_ms": 395.56
+  }
+}

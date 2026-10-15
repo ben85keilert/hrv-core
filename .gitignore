@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Werkzeuge
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Betriebssystem / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Daten: NIEMALS committen (Gesundheitsdaten) ---
+# De-identifizierte Messungen liegen lokal unter daten/<code>/ (Codes wie p001,
+# selbst). Nur Ben befüllt den Ordner (scripts/deid_export.py), geprüft mit
+# scripts/pruefe_daten.py.
+daten/
+# Messdateien überall gesperrt; erlaubt sind nur die versionierten Fixtures
+# und die Golden-Master-Referenzen.
+*.json
+!tests/fixtures/**
+!tests/golden/**
+.backup_*.json
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

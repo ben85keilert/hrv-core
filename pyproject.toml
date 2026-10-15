@@ -1,0 +1,54 @@
+# hrv-core — gemeinsame HRV-Bibliothek von praxis_gui und trainingsapp.
+#
+# Laufzeit: nur numpy. scipy und neurokit2 gibt es auf Android/iOS nicht
+# (trainingsapp läuft dort über Flet); sie dienen hier ausschließlich der
+# Referenztestung (Gruppe `referenz`, Tests unter tests/referenz/).
+# tests/test_import_regel.py erzwingt das per AST-Scan.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hrv-core"
+description = "HRV-Auswertung aus RR-/PPI-Intervallen: Einlesen raw-v1/analysis-v1, Artefaktkorrektur, Kennzahlen, Segmentierung"
+readme = "README.md"
+requires-python = ">=3.12"
+dynamic = ["version"]
+dependencies = [
+    "numpy>=2.1",
+]
+
+[project.optional-dependencies]
+# Plots geben eine matplotlib-Figure zurück und speichern nichts selbst (Phase 4).
+plots = ["matplotlib>=3.9"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+# Nur für Vergleichstests gegen die Referenzimplementierungen (scipy 1.18,
+# neurokit2 0.2.12 — die Stände, gegen die praxis_gui gerechnet hat).
+# Nie als Laufzeitabhängigkeit eintragen.
+referenz = [
+    "scipy>=1.18",
+    "neurokit2>=0.2.12",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "hrv_core.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
