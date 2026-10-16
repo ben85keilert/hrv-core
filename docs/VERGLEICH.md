@@ -141,6 +141,20 @@ TA ist der neue Standard; praxis_gui ändert sich an diesen Stellen. Vorher/Nach
   international vergleichbar; die Anzeige rechnet in Ortszeit um. praxis_gui stellt in Phase 3 um
   (Erkennung bleibt am Muster `sensor_*.json`, Altdateien bleiben lesbar).
 
+## Stand nach Phase 3 (2026-10-16)
+
+Beide Apps rechnen mit hrv-core (trainingsapp v0.2.0, praxis_gui Branch
+`refactor/hrv-core`). praxis_gui belegt die Zahlengleichheit mit
+`tests/test_hrv_core_abgleich.py` gegen `hrv_core.referenz` auf den Fixtures
+hier (96 Fälle: korrigierte Reihe, Zeitbereich, Lomb/Welch samt Kurve,
+Poincaré, DFA, SampEn, Atmung). Umgesetzt aus G: Kubios, `compute_nonlinear`
+(NK2), Spline/Hilbert-RSA, kontinuierliche Atemrate, Kohärenz, EKG-Auswertung
+entfallen; Spektrogramm und Spektralprofil liegen in hrv-core (0.2.0);
+Rolling/Segment/Overlap laufen über `trends.verlauf` (Raster statt je Schlag,
+Live-Neuaufbau je Schlag); Live-Grenzen 250 ms; astropy raus; Dateinamen nach
+UTC-Start. Offen (OFFENE_PUNKTE R13/R14): `sensor_verwerfung = "selbst"` und
+`LiveFenster` in praxis_gui.
+
 ## F. Vorgehen Phase 2 (nach Freigabe)
 
 1. `trainingsapp/scripts/export_referenz.py`: je Fixture Kennzahlen (`kennzahlen`), Ketten

@@ -12,14 +12,14 @@ uv run pytest
 ```
 
 Einbindung in die Apps (uv): `[tool.uv.sources] hrv-core = { path = "../hrv-core", editable = true }`;
-fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0.1.0" }`.
+fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0.2.0" }`.
 
 ## Aufbau
 
 - `src/hrv_core/` — die Bibliothek (aus `trainingsapp.hrv_core`, ALGO_VERSION 7): `recording`/`aufnahme`
   (raw-v1), `regeln`/`korrektur` (Automatik und Expertenkorrektur, Sidecar analysis-v1), `segments`,
-  `time_domain`, `frequency`, `nonlinear`, `atmung`, `trends`, `ausschnitte`, `ppi`/`zeitachse`
-  (Verity Sense), `live`, `ereignisse`, `referenz` (alles auf einmal), `deid`.
+  `time_domain`, `frequency` (samt Spektrogramm), `nonlinear`, `atmung`, `spektralprofil`, `trends`,
+  `ausschnitte`, `ppi`/`zeitachse` (Verity Sense), `live`, `ereignisse`, `referenz` (alles auf einmal), `deid`.
 - `tests/fixtures/` Messdateien ohne Personenbezug · `tests/golden/trainingsapp/` Golden Master
   (`test_golden_trainingsapp.py`, 1e-9) · `tests/golden/praxis_gui/` Vorher-Stand von praxis_gui
   (scipy/NK2) für `docs/VERGLEICH_ZAHLEN.md` · `tests/referenz/` Vergleich gegen scipy/neurokit2.

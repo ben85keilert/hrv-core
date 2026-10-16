@@ -611,6 +611,37 @@ max_missing_pct   ulf 20 · vlf 15 · lf 10 · hf 5
 
 ---
 
+### Spektrogramm (`frequency.spektrogramm`, seit 0.2.0)
+
+Zeit-Frequenz-Bild für die Anzeige: Plausibilitätsfilter, lineares Resampling
+des Tachogramms auf 4 Hz ab dem Beginn des ersten Intervalls (Herzuhr), dann je
+120-s-Fenster (Schritt 30 s) Mittelwert abziehen und `welch_psd` (256, 50 %,
+Hann); Frequenzen bis 0,5 Hz, Zeit = Fenstermitte. Zahl für Zahl aus praxis_gui
+`spectrum.compute_spectrogram` (scipy) übernommen — `tests/test_spektralprofil.py`
+vergleicht mit dessen Golden-Dateien auf 1e-9, `tests/referenz/` mit scipy.
+
+### Spektralprofil (`spektralprofil.py`, seit 0.2.0)
+
+Deskriptoren eines Spektrums ohne Urteil (praxis_gui, Schritt 1 des
+Bewertungsplans): Bandwerte und Kurve aus **einer** Rechnung
+(`frequenzbereich`), Gipfel im Formband 0,04–0,40 Hz (Lage, Höhe,
+Halbwertsbreite, Güte f/Δf, Anteil), Gipfellage je LF und HF, spektrale
+Entropie und Flatness, Kontext (Ø RR/HF, Dauer, Abdeckung, Ektopie-Anteil),
+Atemfrequenz und Atemschwankung über `atmung.median`, auf Wunsch DFA α1 und
+gekappte SampEn. `PROFIL_VERSION = 2`: gegenüber praxis_gui (1) ohne
+Kohärenzindex, Atemschwankung aus `atmung`, Spektrum auf der Herzuhr.
+`PROFIL_ZEILEN` ist die Reihenfolge für A|B|Δ-Tabellen.
+
+### Atmung über mehrere Fenster (`atmung.fenster`, `atmung.median`, seit 0.2.0)
+
+`fenster` legt gleitende Fenster (60 s, Schritt 15 s; Enden ab
+`t[0] + 60` bis `t[-1]`) und liefert je Fenster `Atmung`; `median` nimmt
+den Median der gültigen Fenster (Rate, `rsa_ms`, `rsa_bpm`, Gipfelanteil)
+und zählt die Gründe der ungültigen. Eine Reihe kürzer als ein Fenster ist
+ein Fenster. `ausschnitte.abschnitt_werte` rechnet die Atemfrequenz eines
+Abschnitts über dieselbe Funktion (Golden-Tests unverändert); praxis_gui
+nutzt sie für Atemfrequenz und Atemschwankung der Nachberechnung.
+
 ## Nichtlineare Kennzahlen
 
 ### Poincaré (implementiert)
