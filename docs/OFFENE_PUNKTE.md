@@ -15,6 +15,7 @@ Stand 2026-10-16. Je Punkt: Ort, Befund, Vorschlag. Behebung erst nach dem Umzug
 | R7 | praxis_gui `spectrum.py` MAX_GRID_BINS, trainingsapp vor ALGO 5 | Deckel 2000 Bins macht df gröber als 1/T → Trapez überschätzt schmale Gipfel bei > 67 min | TA-„langer Weg“ wird Standard |
 | R8 | trainingsapp `constants.py` | ungenutzt: `WELCH_OVERLAP` (Overlap fest `n−n//2`), `DFA_DETREND_BOX`, `RECOMMENDED_BEATS_FREQUENCY`, `SAMPEN_MAX_BEATS_LIVE` (nur Docstring; UI deckelt bei 3000) | beim Umzug bereinigen (keine Zahl ändert sich) |
 | R9 | trainingsapp `ui/views/messung_detail.py` | Rechenlogik in der UI: `_Zustand`, Atem-Median (doppelt zu `ausschnitte.py:192`), SampEn-Deckel, DFA ganze Reihe (Befund H11) | Phase 3 trainingsapp |
+| R11 | praxis_gui `effective_rr_true()` als PSD-Stützstellen (CLAUDE.md, `sensor_hrv.md` „Echte Zeitachse“) | Die Wanduhr ist die Paketankunft (H10: 1-s-Takt, `r`-Stempel zurückgerechnet) — als Lomb-Stützstellen ein Zeitjitter, der HF hebt: Generator Kohärenzatmung Wahrheit 67,5 ms², praxis_gui 670, hrv-core (Herzuhr je Teilstück) 44,6; Ruhe liegend +19 %. Die Doku warnte nur vor `r`-Stempeln (+9–10 %) | erledigt sich mit dem Umstieg: hrv-core trennt an Lücken (Wanduhr) und rechnet auf der Herzuhr; praxis_gui-Doku in Phase 3 korrigieren (`docs/VERGLEICH_ZAHLEN.md`) |
 | R10 | praxis_gui `analysis_service.py:284-286` | liest `r.get("mean_bpm")`, `respiration_summary` liefert `resp_rate_mean` → `resp_rate_bpm` im Neuberechnungspfad nie gesetzt | Bug; nach Umzug |
 
 ## Dateien und Formate

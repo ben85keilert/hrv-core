@@ -14,6 +14,23 @@ uv run pytest
 Einbindung in die Apps (uv): `[tool.uv.sources] hrv-core = { path = "../hrv-core", editable = true }`;
 fester Stand: `{ git = "ssh://git@github.com/ben85keilert/hrv-core.git", tag = "v0.1.0" }`.
 
+## Aufbau
+
+- `src/hrv_core/` — die Bibliothek (aus `trainingsapp.hrv_core`, ALGO_VERSION 7): `recording`/`aufnahme`
+  (raw-v1), `regeln`/`korrektur` (Automatik und Expertenkorrektur, Sidecar analysis-v1), `segments`,
+  `time_domain`, `frequency`, `nonlinear`, `atmung`, `trends`, `ausschnitte`, `ppi`/`zeitachse`
+  (Verity Sense), `live`, `ereignisse`, `referenz` (alles auf einmal), `deid`.
+- `tests/fixtures/` Messdateien ohne Personenbezug · `tests/golden/trainingsapp/` Golden Master
+  (`test_golden_trainingsapp.py`, 1e-9) · `tests/golden/praxis_gui/` Vorher-Stand von praxis_gui
+  (scipy/NK2) für `docs/VERGLEICH_ZAHLEN.md` · `tests/referenz/` Vergleich gegen scipy/neurokit2.
+- `docs/` — `hrv_algorithmen.md`, `korrektur.md` (Regeln), `VERGLEICH.md` (Entscheidungen),
+  `VERGLEICH_ZAHLEN.md`, `OFFENE_PUNKTE.md`.
+- `scripts/golden_erneuern.py` nur nach begründeter Algorithmusänderung; `scripts/vergleich_praxis_gui.py`.
+
+Beide Apps rechnen mit denselben Funktionen. Unterschiede gibt es nur in der Bedienung: die
+trainingsapp korrigiert standardmäßig automatisch (`Korrekturregeln`-Vorgaben) mit zuschaltbarem
+Expertenmodus, praxis_gui zeigt den Expertenmodus und kann die Automatik.
+
 ## Datenschutz
 
 Dieses Repo wird öffentlich. Deshalb:
