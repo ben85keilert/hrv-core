@@ -14,7 +14,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hrv_core.frequency import lomb_psd, periodogramm_psd, resample_tachogramm, welch_psd
+from hrv_core.frequency import (
+    lomb_psd,
+    periodogramm_psd,
+    resample_tachogramm,
+    spektrogramm,
+    welch_psd,
+)
 from hrv_core.nonlinear import compute_dfa_alpha1
 
 scipy_signal = pytest.importorskip("scipy.signal")
@@ -92,3 +98,19 @@ def test_sampen_nahe_neurokit2() -> None:
     ist = compute_sampen(rr)
     soll, _ = nk.entropy_sample(rr, dimension=2, tolerance=0.2 * float(np.std(rr)))
     assert ist == pytest.approx(float(soll), rel=0.02)
+
+
+@pytest.mark.parametrize("name", DATEIEN)
+def test_spektrogramm_wie_scipy(name: str) -> None:
+    """Jedes Fenster des Spektrogramms ist ein scipy-Welch (256, 50 %) auf 4 Hz."""
+    rr = _rr(name)
+    sg = spektrogramm(rr)
+    t_rs, y = resample_tachogramm((np.cumsum(rr) - rr) / 1000.0, rr, 4.0)
+    n = int(120 * 4)
+    for j, s in enumerate(range(0, t_rs.size - n + 1, 120)):
+        stueck = y[s : s + n]
+        stueck = stueck - stueck.mean()
+        f, p = scipy_signal.welch(stueck, 4.0, nperseg=256, noverlap=128, scaling="density")
+        maske = f <= 0.5
+        np.testing.assert_allclose(sg["freq_hz"], f[maske], rtol=1e-12)
+        np.testing.assert_allclose(sg["power_ms2"][:, j], p[maske], rtol=1e-9, atol=1e-9 * p.max())

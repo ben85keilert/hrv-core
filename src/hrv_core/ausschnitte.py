@@ -40,7 +40,7 @@ from typing import Any
 
 import numpy as np
 
-from .atmung import RUHE, atemfrequenz
+from .atmung import RUHE, fenster as atem_fenster
 from .constants import LANG_AB_S
 from .ereignisse import Zeitbezug
 from .frequency import Fensterspektrum, fensterspektrum, frequenzbereich
@@ -202,9 +202,8 @@ def abschnitt_werte(
     zt, rr = _echte_zeit(teil, zeiten, von, bis)
     raten = [
         float(a.rate_pro_min)
-        for ende in np.arange(zt[0] + 60.0, zt[-1] + 1e-9, 15.0)
-        if (a := atemfrequenz(zt, rr, ende - 60.0, ende, modus=atem_modus)).gueltig
-        and a.rate_pro_min is not None
+        for _, a in atem_fenster(zt, rr, modus=atem_modus)
+        if a.gueltig and a.rate_pro_min is not None
     ]
     werte["atem"] = float(np.median(raten)) if raten else None
     if frequenz and bis - von >= 120.0:

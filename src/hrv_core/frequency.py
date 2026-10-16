@@ -99,7 +99,7 @@ from .constants import (
     VLF_MITTEL_S,
     WELCH_NPERSEG,
 )
-from .segments import Segment, gueltig_maske
+from .segments import Segment, filter_rr, gueltig_maske
 
 PSDMethode = Literal["lomb", "welch", "periodogram"]
 Strategie = Literal["teilspektren", "gesamt"]
@@ -945,11 +945,72 @@ def vlf_fenster(
     return integriere_band(raster, _lomb_hann(t_mitte, y, raster), lo, hi)
 
 
+# ---------------------------------------------------------------------------
+# Spektrogramm: Zeit-Frequenz-Bild aus gleitenden Welch-Fenstern
+# ---------------------------------------------------------------------------
+
+SPEKTROGRAMM_FENSTER_S = 120.0
+SPEKTROGRAMM_SCHRITT_S = 30.0
+
+
+def spektrogramm(
+    rr_ms: Sequence[float] | np.ndarray,
+    fenster_s: float = SPEKTROGRAMM_FENSTER_S,
+    schritt_s: float = SPEKTROGRAMM_SCHRITT_S,
+) -> dict[str, np.ndarray]:
+    """Zeit-Frequenz-Bild: je Fenster ein Welch-Spektrum (256, 50 %) auf 4 Hz.
+
+    Aus praxis_gui ``spectrum.compute_spectrogram`` (scipy) übernommen, Zahl
+    für Zahl: Plausibilitätsfilter, lineares Resampling des Tachogramms auf
+    `RESAMPLE_FS_HZ` ab dem Beginn des ersten Intervalls (Herzuhr), dann je
+    Fenster Mittelwert abziehen und `welch_psd`. Frequenzen bis `F_MAX_HZ`.
+    Die Zeit ist die Fenstermitte; ``power_ms2`` hat die Form
+    ``(n_freq, n_zeit)``. Zu kurz (unter 60 Schlägen oder unter einem
+    Fenster): leere Felder.
+
+    >>> rr = 800 + 30 * np.sin(2 * np.pi * 0.25 * np.cumsum(np.full(400, 0.8)))
+    >>> sg = spektrogramm(rr)
+    >>> sg["power_ms2"].shape, float(sg["freq_hz"][sg["power_ms2"][:, 0].argmax()])
+    ((33, 7), 0.25)
+    """
+    leer = {"time_s": np.array([]), "freq_hz": np.array([]), "power_ms2": np.array([[]])}
+    rr = filter_rr(rr_ms)
+    if rr.size < MIN_BEATS_FREQUENCY:
+        return leer
+    # Zeit am Beginn jedes Intervalls — wie praxis_gui ohne Zeitachse
+    t_rs, y = resample_tachogramm((np.cumsum(rr) - rr) / 1000.0, rr)
+    n_fenster = int(fenster_s * RESAMPLE_FS_HZ)
+    if t_rs.size < n_fenster:
+        return leer
+    schritt = max(1, int(schritt_s * RESAMPLE_FS_HZ))
+    starts = range(0, t_rs.size - n_fenster + 1, schritt)
+    zeiten, spektren = [], []
+    freqs: np.ndarray | None = None
+    for s in starts:
+        stueck = y[s : s + n_fenster]
+        stueck = stueck - stueck.mean()
+        f, p = welch_psd(stueck, RESAMPLE_FS_HZ, min(WELCH_NPERSEG, stueck.size))
+        if freqs is None:
+            freqs = f
+        spektren.append(p)
+        zeiten.append(float(t_rs[s]) + fenster_s / 2.0)
+    if freqs is None or not spektren:
+        return leer
+    maske = freqs <= F_MAX_HZ
+    return {
+        "time_s": np.asarray(zeiten),
+        "freq_hz": freqs[maske],
+        "power_ms2": np.vstack(spektren).T[maske, :],
+    }
+
+
 __all__ = [
     "BAENDER",
     "BAND_MIN_DAUER_S",
     "FREQ_BANDS",
     "GIPFEL_BEREICH_HZ",
+    "SPEKTROGRAMM_FENSTER_S",
+    "SPEKTROGRAMM_SCHRITT_S",
     "Fensterspektrum",
     "PSDMethode",
     "Spektrum",
@@ -965,6 +1026,7 @@ __all__ = [
     "pruefe_bandpolitik",
     "resample_tachogramm",
     "spanne_s",
+    "spektrogramm",
     "spektrum",
     "teilstuecke",
     "vlf_fenster",

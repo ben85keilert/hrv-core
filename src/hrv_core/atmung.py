@@ -499,12 +499,118 @@ def _schwach(
     return _leistung(f, p, f_hoch, dauer) <= OBERWELLE_FAKTOR * _leistung(f, p, f_tief, dauer)
 
 
+# ---------------------------------------------------------------------------
+# Gleitende Fenster: Atemfrequenz über eine ganze Messung oder einen Abschnitt
+# ---------------------------------------------------------------------------
+
+#: Fenster und Schritt der gleitenden Atemschätzung (Abschnitte, Nachberechnung)
+FENSTER_S = 60.0
+SCHRITT_S = 15.0
+
+
+def fenster(
+    t_s: np.ndarray | list[float],
+    rr_ms: np.ndarray | list[float],
+    fenster_s: float = FENSTER_S,
+    schritt_s: float = SCHRITT_S,
+    modus: str = RUHE,
+) -> list[tuple[float, Atmung]]:
+    """Gleitende Fenster über die Reihe: ``[(Fensterende, Atmung)]``.
+
+    Fensterenden liegen bei ``t[0] + fenster_s``, dann alle ``schritt_s`` bis
+    ``t[-1]``. Ist die Reihe kürzer als ein Fenster, gibt es keines — dann
+    entscheidet der Aufrufer, ob er die ganze Reihe als ein Fenster nimmt.
+    So rechnen `ausschnitte.abschnitt_werte` und praxis_gui (Median der
+    gültigen Minutenfenster).
+
+    >>> t = np.cumsum(1000 + 20 * np.sin(2 * np.pi * 0.2 * np.arange(150))) / 1000
+    >>> rr = 1000 + 20 * np.sin(2 * np.pi * 0.2 * t)
+    >>> f = fenster(t, rr)
+    >>> len(f), all(a.gueltig for _, a in f), round(float(f[0][0] - t[0]), 1)
+    (6, True, 60.0)
+    """
+    t = np.asarray(t_s, dtype=float)
+    r = np.asarray(rr_ms, dtype=float)
+    if t.size == 0 or t.size != r.size:
+        return []
+    return [
+        (float(ende), atemfrequenz(t, r, ende - fenster_s, ende, modus=modus))
+        for ende in np.arange(t[0] + fenster_s, t[-1] + 1e-9, schritt_s)
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class AtmungMedian:
+    """Atemfrequenz über mehrere Fenster: Median der gültigen (``None`` ohne)."""
+
+    rate_pro_min: float | None
+    rsa_ms: float | None  # Median der Spitze–Tal-Werte (ms) der gültigen Fenster
+    rsa_bpm: float | None
+    anteil: float  # Median des Gipfelanteils der gültigen Fenster, 0 ohne
+    n_fenster: int
+    n_gueltig: int
+    #: Häufigster erster Grund je ungültigem Fenster, absteigend nach Häufigkeit
+    gruende: list[str]
+
+    @property
+    def gueltig(self) -> bool:
+        return self.rate_pro_min is not None
+
+
+def median(
+    t_s: np.ndarray | list[float],
+    rr_ms: np.ndarray | list[float],
+    fenster_s: float = FENSTER_S,
+    schritt_s: float = SCHRITT_S,
+    modus: str = RUHE,
+) -> AtmungMedian:
+    """Median der gültigen Fenster (`fenster`); eine kurze Reihe ist ein Fenster.
+
+    >>> t = np.cumsum(1000 + 20 * np.sin(2 * np.pi * 0.2 * np.arange(150))) / 1000
+    >>> rr = 1000 + 20 * np.sin(2 * np.pi * 0.2 * t)
+    >>> m = median(t, rr)
+    >>> m.gueltig, round(m.rate_pro_min, 1), m.n_fenster, m.n_gueltig
+    (True, 12.0, 6, 6)
+    >>> median([], []).gueltig
+    False
+    """
+    t = np.asarray(t_s, dtype=float)
+    r = np.asarray(rr_ms, dtype=float)
+    alle = fenster(t, r, fenster_s, schritt_s, modus)
+    if not alle and t.size and t.size == r.size:
+        alle = [(float(t[-1]), atemfrequenz(t, r, modus=modus))]
+    gueltig = [a for _, a in alle if a.gueltig]
+    zaehler: dict[str, int] = {}
+    for _, a in alle:
+        if not a.gueltig and a.gruende:
+            zaehler[a.gruende[0]] = zaehler.get(a.gruende[0], 0) + 1
+
+    def _median(werte: list[float | None]) -> float | None:
+        w = [float(x) for x in werte if x is not None]
+        return float(np.median(w)) if w else None
+
+    return AtmungMedian(
+        rate_pro_min=_median([a.rate_pro_min for a in gueltig]),
+        rsa_ms=_median([a.rsa_ms for a in gueltig]),
+        rsa_bpm=_median([a.rsa_bpm for a in gueltig]),
+        anteil=_median([a.anteil for a in gueltig]) or 0.0,
+        n_fenster=len(alle),
+        n_gueltig=len(gueltig),
+        gruende=sorted(zaehler, key=lambda k: zaehler[k], reverse=True),
+    )
+
+
 __all__ = [
     "ATEMUEBUNG",
     "ATEM_BAND_HZ",
     "ATEM_VERSION",
+    "FENSTER_S",
     "RUHE",
+    "SCHRITT_S",
     "Atmung",
+    "AtmungMedian",
     "atemfrequenz",
+    "fenster",
     "kurzgrund",
+    "median",
 ]
