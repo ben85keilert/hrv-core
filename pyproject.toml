@@ -13,6 +13,8 @@ build-backend = "setuptools.build_meta"
 name = "hrv-core"
 description = "HRV-Auswertung aus RR-/PPI-Intervallen: Einlesen raw-v1/analysis-v1, Artefaktkorrektur, Kennzahlen, Segmentierung"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dynamic = ["version"]
 dependencies = [

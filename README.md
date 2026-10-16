@@ -12,7 +12,7 @@ uv run pytest
 ```
 
 Einbindung in die Apps (uv): `[tool.uv.sources] hrv-core = { path = "../hrv-core", editable = true }`;
-fester Stand: `{ git = "ssh://git@github.com/ben85keilert/hrv-core.git", tag = "v0.1.0" }`.
+fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0.1.0" }`.
 
 ## Aufbau
 
@@ -33,7 +33,7 @@ Expertenmodus, praxis_gui zeigt den Expertenmodus und kann die Automatik.
 
 ## Datenschutz
 
-Dieses Repo wird öffentlich. Deshalb:
+Dieses Repo ist öffentlich. Deshalb:
 
 - Keine Patientendaten, auch nicht de-identifiziert. Versioniert sind nur `tests/fixtures/`
   (synthetisch, PhysioNet, eigene Aufnahmen von Ben ohne Personenbezug) und `tests/golden/`.
@@ -46,3 +46,11 @@ Dieses Repo wird öffentlich. Deshalb:
 - Nachbarrepos: `hrv-research` (privat, Exploration, Notebooks, Modelle), `trainingsapp`,
   `trainingsapp-praxis` (privat), `trainingsapp-inhalte` (privat), `praxis_gui`. Öffentliche Repos
   hängen nie von privaten ab.
+
+## Lizenz
+
+[AGPL-3.0](LICENSE). Nutzen, ändern und weitergeben ist frei — auch in der eigenen Praxis oder
+für den Eigenbedarf. Wer die Bibliothek in ein Produkt einbaut oder als Dienst betreibt, muss
+dessen Quelltext unter der AGPL offenlegen; wer das nicht möchte, braucht eine kommerzielle
+Lizenz des Projektinhabers (auf Anfrage). Beiträge unterliegen der CLA in
+[CONTRIBUTING.md](CONTRIBUTING.md), die dem Projektinhaber diese Dual-Lizenzierung offenhält.
