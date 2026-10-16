@@ -42,6 +42,11 @@ default-groups = ["dev"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# py.typed: die Bibliothek ist durchgehend annotiert; ohne die Marke sähe mypy in
+# den Apps jede Funktion als Any und prüfte Aufrufe nicht mehr.
+[tool.setuptools.package-data]
+hrv_core = ["py.typed"]
+
 [tool.setuptools.dynamic]
 version = {attr = "hrv_core.__version__"}
 
