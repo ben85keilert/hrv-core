@@ -46,8 +46,9 @@ where = ["src"]
 version = {attr = "hrv_core.__version__"}
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src/hrv_core"]
 pythonpath = ["src"]
+addopts = "--doctest-modules"
 
 [tool.ruff]
 line-length = 100

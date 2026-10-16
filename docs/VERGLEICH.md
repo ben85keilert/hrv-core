@@ -21,9 +21,17 @@ ist die Bedienung, und die bleibt in den Apps:
 Folge für Phase 2: `Korrekturregeln` ist die einzige Stelle, an der ein Parameter „nach App“ gesetzt
 wird — und zwar in der App, nicht in der Bibliothek.
 
+## Entscheidung (Ben, 2026-10-16)
+
+> **trainingsapp ist der aktuelle Stand.** praxis_gui wird in allen Punkten nachgezogen, vor allem
+> die Behandlung von `rr_ms = 0` (keine Artefakte, keine Naht im Spektrum). scipy, neurokit2 und
+> astropy kommen überall raus. Für die Tabellen unten gilt deshalb in jeder Zeile: **Entscheidung =
+> TA-Standard**; die Spalte bleibt zur Übersicht stehen. Was das je Zeile in D bedeutet, steht in
+> Abschnitt G.
+
 ## Spalten
 
-**Vorschlag** = Vorgehen beim Umzug. Entscheidung Ben = leer, bis freigegeben.
+**Vorschlag** = Vorgehen beim Umzug. Entscheidung = TA-Standard (siehe oben), sofern nicht in G anders benannt.
 
 Kürzel: TA = `trainingsapp/src/trainingsapp/hrv_core/`, PG = `praxis_gui/src/praxislab/sensors/polar_h10/`.
 
@@ -104,6 +112,29 @@ TA ist der neue Standard; praxis_gui ändert sich an diesen Stellen. Vorher/Nach
 | `recording.py`/`aufnahme.py` (raw-v1 lesen/schreiben, atomar, Backup) | | praxis_gui-Schreiber (5 Stellen) könnten darauf umziehen — Phase 3, eigene Entscheidung | |
 | `export.py` | Diagnose | App | |
 | `training.py` | GPX | App | |
+
+## G. Folgen der Entscheidung für die praxis_gui-Funktionen aus D
+
+| Funktion | Was geschieht |
+|---|---|
+| Kubios-Vorkorrektur vor DFA | **entfällt.** DFA α1 rechnet auf der Malik-/Ketten-korrigierten Reihe (`nonlinear.compute_dfa_alpha1`) |
+| `compute_nonlinear` (NK2) | **entfällt.** SD1/SD2 aus `nonlinear.compute_poincare`, SampEn aus `compute_sampen`, DFA wie oben |
+| RSA Peak-to-Trough (Spline/Butterworth/Hilbert) | **ersetzt** durch `atmung.rsa_ms`/`rsa_bpm` (Spitze–Tal im gefilterten Tachogramm, Median je Fenster) und `live._schwankung`; der scipy-Weg wird nicht portiert. Vorher/Nachher aus `tests/golden/praxis_gui/` dokumentieren |
+| Kontinuierliche Atemrate | **ersetzt** durch `trends.atmung_aktuell` / Verlaufskurve „atemfrequenz“ |
+| Kohärenz-Index | **entfällt** (praxis_gui zeigt seit der Live-PSD ohne Urteil keine Bewertung) |
+| EDR aus EKG, `nk2_analysis.py` (R-Zacken, `nk.hrv`) | **entfällt mit NK2.** Das EKG-Rohsignal wird weiter aufgezeichnet (`_ecg.json`); eine R-Zacken-Erkennung in numpy wäre neue Arbeit (hrv-research) — **offen, ob gewünscht** |
+| Spektrogramm | **portieren** auf den numpy-Welch aus `frequency.welch_psd` (reiner Umzug, Zahlen ppm-gleich) |
+| Spektralprofil | **übernehmen** 1:1 (nur numpy); die PSD kommt aus `frequency` |
+| Rolling/Segment/Overlap-Fensterung | **ersetzt** durch `trends.verlauf` (gleitend/Blöcke); Smart-Cache bleibt in praxis_gui als Persistenz |
+| Korrektur-Ops `set_value`/`split`/`merge` | **bleiben** — `korrektur.anwenden` kennt sie; Erzeugung im Expertenmodus der Apps |
+| Lomb/Welch/Periodogramm (scipy) | **ersetzt** durch `frequency` (numpy); Golden-Vergleich 2e-5 bekannt |
+| Lücken, Ketten, Malik, Nullen | TA-Standard; praxis_gui-Expertenpanel bindet an `Korrekturregeln` |
+| Live-Grenzen 300 ms, Nebenpfade 300 ms | auf 250 ms über die Bibliothek |
+| Generator, Prüfbericht | bleiben in praxis_gui (numpy); Generator später eigenes Paket |
+| `astropy` | aus `pyproject.toml` entfernen |
+
+**Noch offen nach dieser Entscheidung:** nur die EKG-Frage (R-Zacken-Erkennung ohne NK2 — ja/nein),
+und die Dateinamensregel (lokale Stoppzeit vs. UTC-Start), die kein Algorithmus ist.
 
 ## F. Vorgehen Phase 2 (nach Freigabe)
 
