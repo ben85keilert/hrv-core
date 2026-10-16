@@ -16,9 +16,16 @@ fester Stand: `{ git = "ssh://git@github.com/ben85keilert/hrv-core.git", tag = "
 
 ## Datenschutz
 
-- Keine Patientendaten im Repo. `daten/` ist gitignoriert: ein Ordner je Person mit neutralem
-  Code (`p001`, `selbst`), befüllt nur von Ben über `python scripts/deid_export.py … --ziel daten/p001`
-  (entfernt nur `patient_id`/`behandlung_id`). Zuordnung Code ↔ Person liegt außerhalb des Repos.
-- Vor jeder Sitzung mit Testdaten: `python scripts/pruefe_daten.py` (oder `$HRV_TESTDATA`).
-- Versioniert sind nur `tests/fixtures/` (synthetisch, PhysioNet, eigene Aufnahmen von Ben,
-  de-identifiziert) und `tests/golden/` (Referenzergebnisse).
+Dieses Repo wird öffentlich. Deshalb:
+
+- Keine Patientendaten, auch nicht de-identifiziert. Versioniert sind nur `tests/fixtures/`
+  (synthetisch, PhysioNet, eigene Aufnahmen von Ben ohne Personenbezug) und `tests/golden/`.
+- De-identifizierte Messungen für Forschung liegen im privaten Repo **hrv-research**, ein Ordner
+  je Person mit neutralem Code (`p001`, `selbst`); Zuordnung Code ↔ Person außerhalb jedes Repos.
+  Der Pfad dorthin steht in `$HRV_TESTDATA`. Die Werkzeuge dafür liefert hrv-core:
+  `python scripts/deid_export.py <messdatei> --ziel $HRV_TESTDATA/p001` (entfernt nur
+  `patient_id`/`behandlung_id`, führt nur Ben lokal aus) und vor jeder Sitzung mit Testdaten
+  `python scripts/pruefe_daten.py` (prüft `$HRV_TESTDATA`).
+- Nachbarrepos: `hrv-research` (privat, Exploration, Notebooks, Modelle), `trainingsapp`,
+  `trainingsapp-praxis` (privat), `trainingsapp-inhalte` (privat), `praxis_gui`. Öffentliche Repos
+  hängen nie von privaten ab.

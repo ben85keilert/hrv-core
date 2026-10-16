@@ -25,12 +25,10 @@ Thumbs.db
 *.swp
 
 # --- Daten: NIEMALS committen (Gesundheitsdaten) ---
-# De-identifizierte Messungen liegen lokal unter daten/<code>/ (Codes wie p001,
-# selbst). Nur Ben befüllt den Ordner (scripts/deid_export.py), geprüft mit
-# scripts/pruefe_daten.py.
-daten/
-# Messdateien überall gesperrt; erlaubt sind nur die versionierten Fixtures
-# und die Golden-Master-Referenzen.
+# Dieses Repo wird öffentlich. De-identifizierte Messungen liegen nicht hier,
+# sondern im privaten Repo hrv-research (Pfad über $HRV_TESTDATA). Erlaubt sind
+# nur die versionierten Fixtures (synthetisch, PhysioNet, eigene Aufnahmen von
+# Ben) und die Golden-Master-Referenzen.
 *.json
 !tests/fixtures/**
 !tests/golden/**
@@ -39,3 +37,8 @@ daten/
 *.db-journal
 *.db-wal
 *.db-shm
+
+
+# Dateien mit eigenen Anmerkungen
+temp*
+tmp*

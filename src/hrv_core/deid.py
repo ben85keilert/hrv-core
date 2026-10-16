@@ -7,7 +7,9 @@ Zwei Aufgaben, beide ohne Personenbezug im Code:
     Feldern), setzt ``patient_id`` und ``behandlung_id`` auf ``null`` und lässt
     **alles andere unverändert**: Datum, Uhrzeit, Gerät, Batteriestand, Titel,
     Notiz, Ereignisse, Messwerte. Welche Messungen zur selben Person gehören,
-    sagt allein der Personenordner (Code wie ``p001``), nicht die Datei.
+    sagt allein der Personenordner (Code wie ``p001``), nicht die Datei. Die
+    Kopien gehören in das private Repo hrv-research (``$HRV_TESTDATA``), nie
+    in dieses — hrv-core wird öffentlich.
 
 ``pruefen(wurzel)``
     läuft über den Testdatenordner und lehnt ab, was dort nicht hingehört:

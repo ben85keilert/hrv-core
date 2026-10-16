@@ -4,10 +4,11 @@
 Nur Ben führt das lokal aus — das Skript liest Originale aus den
 Patientenordnern und schreibt ausschließlich die Kopie:
 
-    python scripts/deid_export.py <messdatei…> --ziel daten/p001 [--mit-beiwerk]
+    python scripts/deid_export.py <messdatei…> --ziel $HRV_TESTDATA/p001 [--mit-beiwerk]
 
-Entfernt werden nur ``patient_id`` und ``behandlung_id``. Danach
-``python scripts/pruefe_daten.py`` laufen lassen.
+Entfernt werden nur ``patient_id`` und ``behandlung_id``. Ziel ist der
+Testdatenordner im privaten Repo hrv-research, nie ein Ordner in hrv-core.
+Danach ``python scripts/pruefe_daten.py`` laufen lassen.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from hrv_core.deid import deidentifizieren  # noqa: E402
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("messdateien", nargs="+", type=Path)
-    parser.add_argument("--ziel", required=True, type=Path, help="Personenordner, z. B. daten/p001")
+    parser.add_argument("--ziel", required=True, type=Path, help="Personenordner in hrv-research, z. B. $HRV_TESTDATA/p001")
     parser.add_argument("--mit-beiwerk", action="store_true", help="_analyzed/_ecg/_ppg/_truth/__cNN mitnehmen")
     parser.add_argument("--ueberschreiben", action="store_true")
     args = parser.parse_args(argv)
