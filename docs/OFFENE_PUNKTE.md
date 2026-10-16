@@ -16,6 +16,7 @@ Stand 2026-10-16. Je Punkt: Ort, Befund, Vorschlag. Behebung erst nach dem Umzug
 | R8 | trainingsapp `constants.py` | ungenutzt: `WELCH_OVERLAP` (Overlap fest `n−n//2`), `DFA_DETREND_BOX`, `RECOMMENDED_BEATS_FREQUENCY`, `SAMPEN_MAX_BEATS_LIVE` (nur Docstring; UI deckelt bei 3000) | beim Umzug bereinigen (keine Zahl ändert sich) |
 | R9 | trainingsapp `ui/views/messung_detail.py` | Rechenlogik in der UI: `_Zustand`, Atem-Median (doppelt zu `ausschnitte.py:192`), SampEn-Deckel, DFA ganze Reihe (Befund H11) | Phase 3 trainingsapp |
 | R11 | praxis_gui `effective_rr_true()` als PSD-Stützstellen (CLAUDE.md, `sensor_hrv.md` „Echte Zeitachse“) | Die Wanduhr ist die Paketankunft (H10: 1-s-Takt, `r`-Stempel zurückgerechnet) — als Lomb-Stützstellen ein Zeitjitter, der HF hebt: Generator Kohärenzatmung Wahrheit 67,5 ms², praxis_gui 670, hrv-core (Herzuhr je Teilstück) 44,6; Ruhe liegend +19 %. Die Doku warnte nur vor `r`-Stempeln (+9–10 %) | erledigt sich mit dem Umstieg: hrv-core trennt an Lücken (Wanduhr) und rechnet auf der Herzuhr; praxis_gui-Doku in Phase 3 korrigieren (`docs/VERGLEICH_ZAHLEN.md`) |
+| R12 | praxis_gui `nk2_analysis.py`, `respiration.edr_from_ecg` | EKG-Auswertung hängt an NK2 | **entfällt** (Ben 2026-10-16); EKG-Rohsignal bleibt; Ersatz später aus hrv-research |
 | R10 | praxis_gui `analysis_service.py:284-286` | liest `r.get("mean_bpm")`, `respiration_summary` liefert `resp_rate_mean` → `resp_rate_bpm` im Neuberechnungspfad nie gesetzt | Bug; nach Umzug |
 
 ## Dateien und Formate
@@ -26,7 +27,7 @@ Stand 2026-10-16. Je Punkt: Ort, Befund, Vorschlag. Behebung erst nach dem Umzug
 | F2 | praxis_gui `widget.py:7057` | fünfter raw-v1-Schreiber (Begleitgerät): Herkunftsfelder nicht über `_herkunft_felder`, `simulation` fest False; CLAUDE.md und `tests/test_geraete_provenienz.py:6` zählen „vier“ | Doku/Test nachziehen; Phase 3: alle Schreiber über `hrv_core.recording` |
 | F3 | praxis_gui `analysis.py:1346-1410` | schreibt Titel/Notiz/Ereignisse in die Rohdatei ohne Sidecar-SHA, nicht atomar | Phase 3 |
 | F4 | praxis_gui `analysis_io.py:653` `crop_file_inplace` | verankert Ereignisse nicht neu; im Programm unbenutzt | entfernen oder reparieren |
-| F5 | praxis_gui / trainingsapp | Dateinamen: lokale Stoppzeit vs. UTC-Start; Backup in praxis_gui nach UTC mit `_1` bei Doppelung | gemeinsame Regel festlegen (Vertrag) |
+| F5 | praxis_gui / trainingsapp | Dateinamen: lokale Stoppzeit vs. UTC-Start; Backup in praxis_gui nach UTC mit `_1` bei Doppelung | **entschieden 2026-10-16: UTC-Start** (wie trainingsapp); praxis_gui in Phase 3 |
 | F6 | trainingsapp `docs/kompatibilitaet.md` §6a (uncommittet) | „praxis_gui liest Backups nicht“ ist falsch (`main.py:2167`); ein Backup mit `_wiederherstellung` würde samt Block zur Messdatei | Doku korrigieren; F1 |
 | F7 | trainingsapp `001_init.sql:245` | `hrv_metrics_cache` ohne Code; `measurement.source='hrv'` nie geschrieben; CLAUDE.md beschreibt den Cache als tragend | klären |
 | F8 | trainingsapp `tests/golden/rr/README.md` | sagt „entfernt“, Felder sind vorhanden (null); Kopie 46 B größer als das Original | README präzisieren |

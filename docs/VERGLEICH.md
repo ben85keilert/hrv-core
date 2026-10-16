@@ -133,8 +133,13 @@ TA ist der neue Standard; praxis_gui ändert sich an diesen Stellen. Vorher/Nach
 | Generator, Prüfbericht | bleiben in praxis_gui (numpy); Generator später eigenes Paket |
 | `astropy` | aus `pyproject.toml` entfernen |
 
-**Noch offen nach dieser Entscheidung:** nur die EKG-Frage (R-Zacken-Erkennung ohne NK2 — ja/nein),
-und die Dateinamensregel (lokale Stoppzeit vs. UTC-Start), die kein Algorithmus ist.
+**Entschieden (Ben, 2026-10-16):**
+- **EKG entfällt** in beiden Apps (kein NK2). Das Rohsignal wird weiter aufgezeichnet. Eine
+  EKG-Auswertung ohne NK2 (R-Zacken, später Mustererkennung) ist Aufgabe von hrv-research und kommt,
+  wenn sie dort steht, als numpy-Funktion nach hrv-core.
+- **Dateinamen nach UTC-Start** (`sensor_<UTC-Start>.json`, wie trainingsapp) — genauer und
+  international vergleichbar; die Anzeige rechnet in Ortszeit um. praxis_gui stellt in Phase 3 um
+  (Erkennung bleibt am Muster `sensor_*.json`, Altdateien bleiben lesbar).
 
 ## F. Vorgehen Phase 2 (nach Freigabe)
 
