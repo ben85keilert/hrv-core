@@ -25,6 +25,13 @@ Rechnung bleibt die von praxis_gui, nur die Stützstellen sind die der Kurve.
 praxis_gui (`workbench._write_raw_metadata`) schreibt `metadaten_schreiben`
 nur ``ereignisse``/``notiz``/``titel`` in die Messdatei zurück und frischt
 danach die Prüfsumme im Sidecar auf (`analysis_io.refresh_sidecar_sha1`).
+
+**Marken** (``marke``, Erweiterung der trainingsapp seit 17.10.2026, Vertrag
+Abschnitt 4): Setzt nicht die Person die Notiz, sondern ein Ablauf (Timer,
+Plan, GPS), sagt ``marke`` maschinenlesbar, wer sie setzte und was sie
+bedeutet — ``{"quelle": "timer", "art": "abschnitt", "spur": "timer", …}``.
+Flach, nur die Felder aus `MARKE_FELDER`, nur Zahlen, Text und Ja/Nein; nie
+ein Ort. praxis_gui liest das Feld nicht und behält es beim Bearbeiten.
 """
 
 from __future__ import annotations
@@ -45,6 +52,46 @@ ANKER_FELDER: tuple[str, ...] = ("beat_index", "dt_s", "t_wall_s", "t_s")
 
 #: Diese Kopffelder darf `metadaten_schreiben` ändern — nie die Messwerte
 METADATEN: tuple[str, ...] = ("titel", "notiz", "ereignisse")
+
+#: Felder einer Marke (``marke`` im Ereignis, Vertrag Abschnitt 4), in dieser Folge:
+#:
+#: - ``quelle``: wer sie setzte — ``einheit``, ``timer``, ``plan``, ``gps``
+#: - ``art``: ``start``, ``ende``, ``abschnitt``, ``pause``, ``weiter``,
+#:   ``uebung_start``, ``uebung_ende``, ``km``
+#: - ``spur``: die Abschnittsspur, die sie teilt (``timer``, ``uebung``, ``km``)
+#: - ``einheit``: Kennung des gemeinsamen Ablaufs in der App (ihre Zeitleiste)
+#: - ``name``: Abschnittsname ohne Zusatz („Belastung“); ``runde``/``von``: Runde r von n
+#: - ``zaehlt``: der Abschnitt zählt als Übungszeit
+MARKE_FELDER: tuple[str, ...] = (
+    "quelle",
+    "art",
+    "spur",
+    "einheit",
+    "name",
+    "runde",
+    "von",
+    "zaehlt",
+)
+
+
+def marke_bereinigen(marke: Any) -> dict[str, Any]:
+    """Nur die Felder aus `MARKE_FELDER` mit einfachen Werten, in fester Folge.
+
+    Verschachteltes, Listen und Unbekanntes fallen weg — so reist weder eine
+    Koordinate noch ein Messwert mit.
+
+    >>> marke_bereinigen({"art": "km", "quelle": "gps", "lat": 52.1, "von": [1], "runde": 2})
+    {'quelle': 'gps', 'art': 'km', 'runde': 2}
+    >>> marke_bereinigen(None)
+    {}
+    """
+    if not isinstance(marke, dict):
+        return {}
+    return {
+        k: v
+        for k in MARKE_FELDER
+        if (v := marke.get(k)) is not None and isinstance(v, str | int | float | bool)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -262,13 +309,16 @@ def notiz(
     start_utc: datetime | None,
     alt: dict | None = None,
     uebungen: Sequence[str] | None = None,
+    marke: dict | None = None,
 ) -> dict:
     """Ein Ereignis wie praxis_gui: Anker, ``wall_time``, ``text``.
 
     ``alt``: bestehendes Ereignis — unbekannte Felder (aus praxis_gui) bleiben.
     ``uebungen``: Kurzcodes der genannten Übungen (unsere Erweiterung, Vertrag
     Abschnitt 4) — ``None`` lässt ein vorhandenes Feld stehen, eine leere Liste
-    entfernt es.
+    entfernt es. ``marke``: wer die Notiz setzte und was sie bedeutet (ebenso,
+    bereinigt mit `marke_bereinigen`) — ``None`` lässt eine vorhandene stehen,
+    ein leeres dict entfernt sie.
 
     >>> s = datetime(2026, 10, 13, 16, 0, tzinfo=UTC)
     >>> e = notiz("Atemübung", {"beat_index": 3, "dt_s": 0.2, "t_wall_s": 3.4, "t_s": 3.1}, s)
@@ -279,15 +329,28 @@ def notiz(
     (['text', 'uebungen', 'x'], ['2ATPZC'])
     >>> "uebungen" in notiz("Pause", {"beat_index": 3}, s, alt=mit, uebungen=[])
     False
+    >>> m = notiz("Pause (Runde 1/2)", {"beat_index": 3}, s, uebungen=["2ATPZC"],
+    ...           marke={"art": "abschnitt", "quelle": "timer", "spur": "timer", "lon": 13.4})
+    >>> list(m)[5:], m["marke"]
+    (['text', 'uebungen', 'marke'], {'quelle': 'timer', 'art': 'abschnitt', 'spur': 'timer'})
+    >>> notiz("Pause", {"beat_index": 3}, s, alt=m)["marke"]["art"]
+    'abschnitt'
+    >>> "marke" in notiz("Pause", {"beat_index": 3}, s, alt=m, marke={})
+    False
     """
     out: dict[str, Any] = {k: anker.get(k) for k in ANKER_FELDER}
     out["wall_time"] = uhrzeit(start_utc, anker.get("t_wall_s")) or (alt or {}).get("wall_time", "")
     out["text"] = text.strip()
     if uebungen:
         out["uebungen"] = list(uebungen)
+    if marke is not None and (bereinigt := marke_bereinigen(marke)):
+        out["marke"] = bereinigt
     for k, v in (alt or {}).items():
-        if k not in out and not (k == "uebungen" and uebungen is not None):
-            out[k] = v
+        if k in out or (k == "uebungen" and uebungen is not None):
+            continue
+        if k == "marke" and marke is not None:
+            continue
+        out[k] = v
     return out
 
 
@@ -358,6 +421,7 @@ def metadaten_schreiben(pfad: Path | str, **felder: Any) -> str:
 
 __all__ = [
     "ANKER_FELDER",
+    "MARKE_FELDER",
     "METADATEN",
     "Zeitbezug",
     "achsen_position",
@@ -366,6 +430,7 @@ __all__ = [
     "anker_aus_index",
     "anker_aus_wand",
     "herz_position",
+    "marke_bereinigen",
     "metadaten_schreiben",
     "notiz",
     "sortiert",
