@@ -153,8 +153,7 @@ class Recording:
         return _qualitaet_raten(self.intervall_quelle, self.beats)
 
     def dateiname(self) -> str:
-        ts = (self.start_utc or datetime.now(UTC)).strftime("%Y-%m-%d_%H%M%S")
-        return f"sensor_{ts}.json"
+        return messdatei_name(self.start_utc)
 
     # -- Serialisierung -----------------------------------------------------
 
@@ -352,6 +351,16 @@ def messordner(basis: Path | str, geraeteordner: str, *, simulation: bool = Fals
     return Path(basis) / "Messungen" / (GENERATOR_ORDNER if simulation else geraeteordner)
 
 
+def messdatei_name(start_utc: datetime | None) -> str:
+    """``sensor_<UTC-Start>.json`` — der Name einer Messdatei, schon während der Aufnahme.
+
+    >>> messdatei_name(datetime(2026, 10, 17, 8, 5, 3, 250000, tzinfo=UTC))
+    'sensor_2026-10-17_080503.json'
+    """
+    ts = (start_utc or datetime.now(UTC)).strftime("%Y-%m-%d_%H%M%S")
+    return f"sensor_{ts}.json"
+
+
 def speichern(rec: Recording, ordner: Path | str, dateiname: str | None = None) -> Path:
     """Schreibt eine Messung atomar als `raw-v1` und liefert den Pfad zurück.
 
@@ -371,6 +380,7 @@ __all__ = [
     "ist_messdatei",
     "json_atomar_schreiben",
     "laden",
+    "messdatei_name",
     "messordner",
     "speichern",
 ]

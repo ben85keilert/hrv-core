@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from .constants import AUFNAHME_RR_MAX_MS, AUFNAHME_RR_MIN_MS
-from .recording import Beat, Recording, json_atomar_schreiben
+from .recording import Beat, Recording, json_atomar_schreiben, messdatei_name
 
 _TW_SRC = ("m", "r", "g")
 
@@ -211,6 +211,11 @@ class Aufnahme:
     def backup_name(self) -> str:
         """``.backup_<UTC-Start>.json`` — wie praxis_gui (`_start_backup`)."""
         return f".backup_{self.start_utc.strftime('%Y-%m-%d_%H%M%S')}.json"
+
+    def dateiname(self) -> str:
+        """Name der Messdatei, die `speichern` schreiben wird — schon während der Aufnahme
+        (für Verweise, etwa eine Einheit der App, die über den Dateinamen verknüpft)."""
+        return messdatei_name(self.start_utc)
 
     def backup(self, ordner: Path, *, zusatz: Mapping[str, Any] | None = None) -> Path:
         """Crash-Sicherung, atomar und kompakt (Vertrag, Abschnitt 6a).

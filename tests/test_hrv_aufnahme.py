@@ -228,6 +228,13 @@ def test_dateiname_und_ordner(tmp_path: Path) -> None:
     assert messordner(tmp_path, "PolarH10", simulation=True).name == "Generator"
 
 
+def test_dateiname_steht_schon_waehrend_der_aufnahme_fest(tmp_path: Path) -> None:
+    """Eine Einheit der App verknüpft über den Dateinamen — er muss vorher feststehen."""
+    aufnahme = _gefuellt(h10())
+    name = aufnahme.dateiname()
+    assert aufnahme.speichern(messordner(tmp_path, "PolarH10")).name == name
+
+
 def test_round_trip_speichern_laden(tmp_path: Path) -> None:
     a = verity()
     _gefuellt(a)
