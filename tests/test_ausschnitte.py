@@ -19,6 +19,7 @@ from hrv_core.ausschnitte import (
     aus_grenzen,
     einrasten,
     grenzen_speichern,
+    spuren_speichern,
     zusatz_lesen,
     zusatz_speichern,
 )
@@ -86,6 +87,54 @@ def test_timer_legt_beim_speichern_abschnitte_an(tmp_path) -> None:
     assert ausschnitt is None and [a.name for a in gelesen] == namen
     assert gelesen[0].von_s == pytest.approx(60, abs=1.5)
     assert gelesen[-1].bis_s == pytest.approx(150, abs=1.5)
+
+
+def test_spuren_schneiden_einander_nicht(tmp_path) -> None:
+    """Timer und Kilometer zugleich: Jede Spur teilt nur sich selbst, ein Sidecar für beide."""
+    pfad = tmp_path / GOLDEN.name
+    shutil.copy(GOLDEN, pfad)
+    rec = laden(pfad)
+    achse = schlagzeiten(rec)
+    zb = Zeitbezug(lambda: rec.beats, rec.start_utc, achse=lambda: achse)
+
+    def grenze(x: float, name: str, ende: bool = False) -> tuple[dict, str, bool]:
+        # Das Ereignis steht nicht in ``ereignisse`` — eine stille Grenze reicht
+        return notiz(name, zb.anker(x), rec.start_utc), name, ende
+
+    teile = spuren_speichern(
+        pfad,
+        rec,
+        {
+            "timer": [
+                grenze(60, "Belastung (Runde 1/2)"),
+                grenze(90, "Pause (Runde 1/2)"),
+                grenze(120, "Belastung (Runde 2/2)"),
+                grenze(150, "Timer fertig", ende=True),
+            ],
+            "km": [grenze(30, "km 1"), grenze(100, "km 2"), grenze(200, "Ende", ende=True)],
+        },
+    )
+    namen = [
+        "km 1",
+        "Belastung (Runde 1/2)",
+        "Pause (Runde 1/2)",
+        "km 2",
+        "Belastung (Runde 2/2)",
+    ]
+    assert [a.name for a in teile] == namen
+    km1, _, _, km2, belastung2 = teile
+    # Der Timer teilt „km 1“ nicht, „km 2“ teilt den Timer nicht
+    assert (km1.von_s, km1.bis_s) == (pytest.approx(30, abs=1.5), pytest.approx(100, abs=1.5))
+    assert km2.bis_s == pytest.approx(200, abs=1.5)
+    assert belastung2.bis_s == pytest.approx(150, abs=1.5)
+    assert teile[1].farbe == belastung2.farbe != teile[2].farbe
+    _, gelesen = zusatz_lesen(pfad, float)
+    assert [a.name for a in gelesen] == namen
+    # Eine Spur bleibt, was grenzen_speichern immer war
+    assert [a.name for a in grenzen_speichern(pfad, rec, [grenze(60, "A"), grenze(90, "B")])] == [
+        "A",
+        "B",
+    ]
 
 
 def test_werte_je_abschnitt() -> None:

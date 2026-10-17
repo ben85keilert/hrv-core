@@ -19,7 +19,10 @@ helfen nur:
 
 Der **Timer** legt seine Abschnitte beim Speichern der Aufnahme selbst an
 (`grenzen_speichern`) — „Belastung (Runde 2/8)", „Pause (Runde 2/8)" … —,
-danach sind es Abschnitte wie alle anderen.
+danach sind es Abschnitte wie alle anderen. Laufen mehrere Abläufe zugleich
+(Timer, Übungen eines Plans, Kilometer), hat jeder seine **Spur**
+(`spuren_speichern`): Abschnitte entstehen je Spur, so schneidet ein km-Wechsel
+keinen Timer-Abschnitt; Abschnitte verschiedener Spuren dürfen sich überlappen.
 
 **Zeitachsen.** Die App rechnet auf ihrer Kurvenachse (Sekunden ab Start; bei
 der Verity Sense die Herzuhr aller Intervalle). praxis_gui speichert Zeiten auf
@@ -31,7 +34,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -350,18 +353,44 @@ def grenzen_speichern(
     Für den Timer: ``grenzen`` sind (Notiz, Abschnittsname, beendet nur?) — die
     Notizen, die er beim Abschnittswechsel in die Aufnahme schrieb. Ihre
     Stelle kommt aus dem Anker der Notiz. Ohne Abschnitte bleibt alles, wie es ist.
+    Eine einzige Spur — mehrere: `spuren_speichern`.
+    """
+    return spuren_speichern(rec_pfad, rec, {"": grenzen})
+
+
+def spuren_speichern(
+    rec_pfad: Path, rec: Recording, spuren: Mapping[str, Sequence[tuple[dict, str, bool]]]
+) -> list[Abschnitt]:
+    """Abschnitte mehrerer Spuren (Timer, Übungen, Kilometer …) in **einem** Zug ins Sidecar.
+
+    Jede Spur bildet ihre Abschnitte für sich (`aus_grenzen`): Eine Grenze der
+    einen Spur teilt keinen Abschnitt der anderen, und Abschnitte verschiedener
+    Spuren dürfen sich überlappen (praxis_gui führt Abschnitte als unabhängige
+    Bereiche). Gespeichert wird einmal — ein zweites `zusatz_speichern` ersetzte
+    die erste Spur. Die Abschnitte stehen nach ihrem Anfang geordnet; gleiche
+    Grundnamen bekommen über alle Spuren dieselbe Farbe. Der Name einer Spur
+    dient nur hier: Im Sidecar hätte ein eigenes Feld praxis_gui nicht überlebt.
+
+    Eine Grenze ist (Anker-Ereignis, Abschnittsname, beendet nur?) — das
+    Ereignis muss nicht in ``ereignisse`` stehen (eine „stille“ Grenze, etwa
+    das Ende einer Spur, die vor der Aufnahme endet).
     """
     achse = schlagzeiten(rec)
     if not achse:
         return []
     nach_datei, _ = achsen_umrechnung(achse, [b.t_s for b in rec.beats])
     zb = Zeitbezug(lambda: rec.beats, rec.start_utc, achse=lambda: achse)
-    punkte = [
-        Grenze(x, name, schluss)
-        for eintrag, name, schluss in grenzen
-        if (x := zb.x(eintrag)) is not None
-    ]
-    teile = aus_grenzen(punkte, 0.0, float(achse[-1]))
+    ende = float(achse[-1])
+    teile: list[Abschnitt] = []
+    for grenzen in spuren.values():
+        punkte = [
+            Grenze(x, name, schluss)
+            for eintrag, name, schluss in grenzen
+            if (x := zb.x(eintrag)) is not None
+        ]
+        teile.extend(aus_grenzen(punkte, 0.0, ende))
+    teile.sort(key=lambda a: (a.von_s, a.bis_s))
+    farben_nach_namen(teile)
     if teile:
         zusatz_speichern(rec_pfad, None, teile, nach_datei)
     return teile
@@ -406,6 +435,7 @@ __all__ = [
     "farben_nach_namen",
     "grenzen_speichern",
     "grundname",
+    "spuren_speichern",
     "zusatz_lesen",
     "zusatz_speichern",
 ]
