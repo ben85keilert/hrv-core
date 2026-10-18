@@ -62,6 +62,9 @@ METADATEN: tuple[str, ...] = ("titel", "notiz", "ereignisse")
 #: - ``einheit``: Kennung des gemeinsamen Ablaufs in der App (ihre Zeitleiste)
 #: - ``name``: Abschnittsname ohne Zusatz („Belastung“); ``runde``/``von``: Runde r von n
 #: - ``zaehlt``: der Abschnitt zählt als Übungszeit
+#: - ``soll_s``: die geplante Dauer des Abschnitts (s) — fehlt bei der Stoppuhr
+#: - ``profil``: welcher Ablauf lief — Kurzcode der Profil-ID, die Stoppuhr ``stoppuhr``
+#:   (trainingsapp, 18.10.2026: vergleichbar über Tage, auch nach Umbenennen)
 MARKE_FELDER: tuple[str, ...] = (
     "quelle",
     "art",
@@ -71,6 +74,8 @@ MARKE_FELDER: tuple[str, ...] = (
     "runde",
     "von",
     "zaehlt",
+    "soll_s",
+    "profil",
 )
 
 
@@ -82,6 +87,8 @@ def marke_bereinigen(marke: Any) -> dict[str, Any]:
 
     >>> marke_bereinigen({"art": "km", "quelle": "gps", "lat": 52.1, "von": [1], "runde": 2})
     {'quelle': 'gps', 'art': 'km', 'runde': 2}
+    >>> marke_bereinigen({"profil": "7KQ4M2XA", "soll_s": 60, "quelle": "timer"})
+    {'quelle': 'timer', 'soll_s': 60, 'profil': '7KQ4M2XA'}
     >>> marke_bereinigen(None)
     {}
     """
