@@ -13,7 +13,7 @@ zu ihm beschrieben und gegen ihn geprüft.
 | Polar H10 | RR aus dem EKG, 1/1024 s | EKG 130 Hz (PMD) | erprobt, Referenz | [`geraete.md`](geraete.md) |
 | Polar H9 | RR aus dem EKG | — | nach Profil, ungetestet | [`geraete.md`](geraete.md) |
 | Polar Verity Sense | PPI aus dem PPG (PMD) | PPG komprimiert, kein Decoder | Intervalle gegen H10 geprüft, Zeitachse schwach | [`verity_sense/`](verity_sense/README.md) |
-| Decathlon HRM Belt | **keine** — sendet 60000/bpm in ms | — (herstellereigener Kanal, stumm) | am Gerät geprüft, **für HRV unbrauchbar** | [`decathlon_hrm_belt.md`](decathlon_hrm_belt.md) |
+| Decathlon HRM Belt | **keine** — sendet 60000/bpm in ms | — (herstellereigener Kanal, stumm) | am Gerät geprüft, **für HRV unbrauchbar** | [`decathlon/hrm_belt/`](decathlon/hrm_belt/README.md) |
 | Beurer PO60 | keine (nur gespeicherte Mittelwerte) | — | Protokoll entschlüsselt, keine Anbindung | [`beurer_po60/`](beurer_po60/README.md) |
 | Brustgurt nach Standardprofil | RR aus 0x2A37, wenn der Gurt sie sendet | — | je Gerät prüfen | [`geraete.md`](geraete.md), [`ble_uebertragung_pruefen.md`](ble_uebertragung_pruefen.md) |
 
@@ -25,7 +25,7 @@ zu ihm beschrieben und gegen ihn geprüft.
 | [`ble_uebertragung_pruefen.md`](ble_uebertragung_pruefen.md) | Prüfmethode für jedes neue Gerät in vier Ebenen; Goldstandard ist der H10 |
 | [`mehrgeraetebetrieb.md`](mehrgeraetebetrieb.md) | Mehrere Sensoren in einer Sitzung mit gemeinsamem Zeit-Nullpunkt (`sitzung-v1`) |
 | [`verity_sense/`](verity_sense/README.md) | Polar Verity Sense als Abweichung vom H10, mit Messprotokoll |
-| [`decathlon_hrm_belt.md`](decathlon_hrm_belt.md) | Decathlon HRM Belt: kein RR, kein EKG — Befund und Erkundung |
+| [`decathlon/`](decathlon/README.md) | Decathlon-Herzfrequenzprodukte; darunter [`hrm_belt/`](decathlon/hrm_belt/README.md): kein RR, kein EKG — Befund, Rohmitschnitt, Erkundungsergebnis |
 | [`beurer_po60/`](beurer_po60/README.md) | Beurer PO60 Fingerpulsoximeter: Protokoll, Erkundungsläufe, Entscheidung gegen die Anbindung |
 
 Einstufung weiterer Gurte, Uhren und Wearables nach Aktenlage (ohne Test am Gerät):

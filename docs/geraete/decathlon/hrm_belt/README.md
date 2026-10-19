@@ -1,8 +1,26 @@
 # Decathlon HRM Belt: kein RR, kein EKG
 
-Befund vom 19.10.2026 am Gerät (Hersteller „DECATHLON“, Modell „44“, Firmware 0.122), mit
-`scripts/ble_erkundung.py` und einer Aufnahme in praxis_gui (Profil „Brustgurt
-(Standardprofil)“). Vergleichsgerät: Polar H10.
+## Produkt
+
+- **Decathlon HRM Belt**, auf der Support-Seite „Pulsgurt Dual ANT+ / Bluetooth“; Decathlon-REF
+  8801209, Produktcode 346657. Brustgurt mit abnehmbarem Sender, Elektroden im Textilgurt,
+  Bluetooth Smart 4.0 und ANT+, Knopfzelle CR2032, rund 30 €. Offizielle App: Decathlon Coach.
+  Ein Firmware-Update erwähnt Decathlon nirgends.
+- **Am Gerät gelesen:** Bluetooth-Name „HRM Belt <Nummer>“, Device Information: Hersteller
+  „DECATHLON“, Modell „44“, Firmware und Software „0.122“, Hardware „1“. Keine PnP-Kennung.
+- Vorgänger: Kalenji „Dual HRM Belt“ (gleiche Bauart). Weitere Decathlon-Produkte:
+  [`../README.md`](../README.md).
+
+## Dateien in diesem Ordner
+
+| Datei | Inhalt |
+|---|---|
+| `README.md` | dieser Befund |
+| `erkundung_2026-10-19_roh.jsonl` | Rohmitschnitt von `scripts/ble_erkundung.py`: Kopf, 90 HR-Pakete (Hex, Ankunftszeit), Ereignisse |
+| `erkundung_2026-10-19_befund.json` | Dienste und Charakteristiken, Geräteinformation, Kennzahlen des HR-Stroms, Hinweise |
+
+Befund vom 19.10.2026 am Gerät mit `scripts/ble_erkundung.py` (45 s, `--lauschen`) und einer
+Aufnahme in praxis_gui (Profil „Brustgurt (Standardprofil)“). Vergleichsgerät: Polar H10.
 
 ## Ergebnis in Kürze
 

@@ -1,0 +1,154 @@
+{
+  "schema": "ble-erkundung-v1",
+  "adresse": "E2:B4:CC:3F:08:44",
+  "start_utc": "2026-10-19T19:10:07.453180+00:00",
+  "geraetename": "HRM Belt 23162",
+  "dienste": [
+    {
+      "uuid": "180f",
+      "name": "Battery",
+      "charakteristiken": [
+        {
+          "uuid": "2a19",
+          "props": "read,notify"
+        }
+      ]
+    },
+    {
+      "uuid": "180a",
+      "name": "Device Information",
+      "charakteristiken": [
+        {
+          "uuid": "2a24",
+          "props": "read",
+          "wert": "44"
+        },
+        {
+          "uuid": "2a27",
+          "props": "read",
+          "wert": "1"
+        },
+        {
+          "uuid": "2a25",
+          "props": "read"
+        },
+        {
+          "uuid": "2a29",
+          "props": "read",
+          "wert": "DECATHLON"
+        },
+        {
+          "uuid": "2a26",
+          "props": "read",
+          "wert": "0.122"
+        },
+        {
+          "uuid": "2a28",
+          "props": "read",
+          "wert": "0.122"
+        }
+      ]
+    },
+    {
+      "uuid": "180d",
+      "name": "Heart Rate",
+      "charakteristiken": [
+        {
+          "uuid": "2a38",
+          "props": "read"
+        },
+        {
+          "uuid": "2a37",
+          "props": "notify"
+        }
+      ]
+    },
+    {
+      "uuid": "1800",
+      "name": "Generic Access",
+      "charakteristiken": [
+        {
+          "uuid": "2aa6",
+          "props": "read"
+        },
+        {
+          "uuid": "2a01",
+          "props": "read"
+        },
+        {
+          "uuid": "2a00",
+          "props": "read,write"
+        },
+        {
+          "uuid": "2a04",
+          "props": "read"
+        }
+      ]
+    },
+    {
+      "uuid": "8ce5cc01-0a4d-11e9-ab14-d663bd873d93",
+      "name": "herstellereigen — Kandidat für Rohdaten",
+      "charakteristiken": [
+        {
+          "uuid": "8ce5cc02-0a4d-11e9-ab14-d663bd873d93",
+          "props": "write-without-response,write,notify"
+        },
+        {
+          "uuid": "8ce5cc03-0a4d-11e9-ab14-d663bd873d93",
+          "props": "write-without-response,write,notify"
+        }
+      ]
+    },
+    {
+      "uuid": "1801",
+      "name": "Generic Attribute",
+      "charakteristiken": []
+    }
+  ],
+  "hat_pmd": false,
+  "rohdaten_kandidaten": [
+    "8ce5cc02-0a4d-11e9-ab14-d663bd873d93",
+    "8ce5cc03-0a4d-11e9-ab14-d663bd873d93"
+  ],
+  "hr_strom": {
+    "pakete": 90,
+    "dauer_s": 44.4,
+    "paketabstand_s": {
+      "median": 0.499,
+      "max": 0.998
+    },
+    "flags": {
+      "rr_flag_anteil": 1.0,
+      "kontakt_unterstuetzt": true,
+      "kontakt_anteil": 1.0,
+      "hr16": false,
+      "energie": false
+    },
+    "rr_je_paket": {
+      "1": 90
+    },
+    "rr_anzahl": 90,
+    "bpm_mittel": 72.2,
+    "bpm_null_anteil": 0.0,
+    "rr_aufloesung_schritt_1024stel": 1,
+    "rr_gleich_60000_durch_bpm_anteil": 0.0,
+    "rr_wiederholung_anteil": 0.742,
+    "zeitbilanz": {
+      "summe_rr_s": 72.28,
+      "spanne_s": 44.39,
+      "fehlend_s": -27.89,
+      "fehlende_schlaege_geschaetzt": -34.3
+    },
+    "rr_ms": {
+      "mittel": 812.5,
+      "min": 741.2,
+      "max": 861.3,
+      "rmssd_roh": 6.3
+    },
+    "hinweise": [
+      "Viele identische aufeinanderfolgende RR: Glättung oder Wiederholung statt echter Schlagfolge.",
+      "Zeitbilanz geht nicht auf: Summe der RR weicht deutlich von der Aufnahmedauer ab — Schläge gehen verloren oder werden doppelt gesendet."
+    ]
+  },
+  "fremde_notifies": {}
+}
