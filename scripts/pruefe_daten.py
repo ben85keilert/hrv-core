@@ -3,9 +3,11 @@
     python scripts/pruefe_daten.py            # $HRV_TESTDATA (Ordner in hrv-research)
     python scripts/pruefe_daten.py tests/fixtures --ohne-ordnerregel
 
-Abgelehnt werden Dateien mit gefülltem ``patient_id``/``behandlung_id`` und
-Ordner, deren Name nicht ``p###`` oder ``selbst`` ist (Exit-Code 1). Freitext
-(``titel``, ``notiz``, Ereignistexte) wird nur aufgezählt — den liest Ben selbst.
+Abgelehnt werden gefüllte Personenfelder (auch verschachtelt: ``teilnehmer[]``,
+``_wiederherstellung.subject_id``), Seriennummern im Gerätenamen, unbekannte
+Felder oder Dateiformate und Ordner, deren Name nicht ``p###`` oder ``selbst``
+ist (Exit-Code 1). Freitext (``titel``, ``notiz``, Ereignistexte, ``marke.name``,
+Abschnittsnamen) wird nur aufgezählt — den liest Ben selbst.
 """
 
 from __future__ import annotations

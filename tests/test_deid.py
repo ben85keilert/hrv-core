@@ -1,4 +1,4 @@
-"""deid: Personenfelder leeren, alles andere unverändert; Prüfung des Datenordners."""
+"""deid: Weißliste je Feld, Personenfelder leeren, Gerät kürzen; Prüfung des Datenordners."""
 
 import json
 from pathlib import Path
@@ -38,7 +38,7 @@ def test_personenfelder_werden_null_und_rest_bleibt(tmp_path):
     assert json.loads(quelle.read_text(encoding="utf-8")) == ROH  # Original unberührt
 
 
-def test_beiwerk_kommt_mit_und_wird_byteweise_kopiert(tmp_path):
+def test_beiwerk_kommt_mit_und_laeuft_durch_seine_weissliste(tmp_path):
     ordner = tmp_path / "quelle"
     ordner.mkdir()
     quelle = ordner / "sensor_1900-01-01_000000.json"
@@ -53,7 +53,8 @@ def test_beiwerk_kommt_mit_und_wird_byteweise_kopiert(tmp_path):
     ziele = deid.deidentifizieren(quelle, tmp_path / "p001", mit_beiwerk=True)
     namen = sorted(z.name for z in ziele)
     assert namen == sorted([quelle.name, sidecar.name, korrigiert.name])
-    assert (tmp_path / "p001" / sidecar.name).read_bytes() == sidecar.read_bytes()
+    kopie_sidecar = json.loads((tmp_path / "p001" / sidecar.name).read_text(encoding="utf-8"))
+    assert kopie_sidecar == {"schema": "analysis-v1", "corrections": []}  # analysis-v1-Weißliste
     kopie_c = json.loads((tmp_path / "p001" / korrigiert.name).read_text(encoding="utf-8"))
     assert kopie_c["patient_id"] is None
 
@@ -104,3 +105,143 @@ def test_versionierte_fixtures_tragen_keine_personenfelder():
     bericht = deid.pruefen(fixtures, ordnerregel=False)
     assert bericht.ok, bericht.ablehnungen
     assert bericht.geprueft > 0
+
+
+# ---------------------------------------------------------------------------
+# Weißliste (Befund F12, 19.10.2026) — eine Datei mit allen genannten Feldern
+# ---------------------------------------------------------------------------
+
+#: Erfunden, kein echter Messwert. Trägt alles, was bis 19.10. unbemerkt durchging.
+VOLL = {
+    "behandlung_id": 42,
+    "patient_id": 7,
+    "datum": "1900-01-01",
+    "geraet": "Polar H10 A1B2C3D4",
+    "geraet_profil": "polar_h10",
+    "intervall_quelle": "ekg_rr",
+    "datenqualitaet": "rr_ekg",
+    "simulation": False,
+    "generator_config": None,
+    "schema": "raw-v1",
+    "analyzed": False,
+    "start_utc": "1900-01-01T00:00:00Z",
+    "batterie_prozent": 90,
+    "ecg_aufzeichnung": False,
+    "ppg_aufzeichnung": False,
+    "titel": "Testperson",
+    "notiz": "",
+    "ereignisse": [
+        {
+            "beat_index": 1,
+            "dt_s": 0.1,
+            "t_wall_s": 0.9,
+            "t_s": 0.9,
+            "wall_time": "01:00:00",
+            "text": "Start",
+            "uebungen": ["2ATPZC"],
+            "marke": {"quelle": "timer", "art": "start", "name": "Ruhe bei Frau X", "lat": 52.1},
+        },
+        {"t_s": 2.0, "text": "", "chart_x": 2.0},
+    ],
+    "messungen": [{"t_s": 0.8, "t_wall_s": 0.81, "tw_src": "m", "hf_bpm": 75, "rr_ms": 800}],
+    "fremdes_feld": {"name": "X"},
+    "_wiederherstellung": {"subject_id": "p-abc", "grenzen": [[{"t": 1.0}, "Ruhe", False]]},
+}
+
+
+def test_weissliste_entfernt_alles_was_sie_nicht_kennt(tmp_path):
+    quelle = tmp_path / "quelle" / ".backup_1900-01-01_000000.json"
+    quelle.parent.mkdir()
+    _schreibe(quelle, VOLL)
+    protokoll = []
+    (ziel,) = deid.deidentifizieren(quelle, tmp_path / "p001", protokoll=protokoll)
+    kopie = json.loads(ziel.read_text(encoding="utf-8"))
+
+    assert kopie["patient_id"] is None and kopie["behandlung_id"] is None
+    assert kopie["geraet"] == "Polar H10"  # Seriennummer weg
+    assert "fremdes_feld" not in kopie and "_wiederherstellung" not in kopie
+    assert kopie["ereignisse"][0]["marke"] == {
+        "quelle": "timer",
+        "art": "start",
+        "name": "Ruhe bei Frau X",
+    }
+    assert kopie["ereignisse"][0]["uebungen"] == ["2ATPZC"]
+    assert kopie["ereignisse"][1] == {"t_s": 2.0, "text": "", "chart_x": 2.0}
+    assert (
+        kopie["start_utc"] == VOLL["start_utc"] and kopie["datum"] == VOLL["datum"]
+    )  # F13: bewusst
+    assert kopie["messungen"] == VOLL["messungen"]
+    gemeldet = {m for _, m in protokoll}
+    assert gemeldet == {
+        "geleert: behandlung_id",
+        "geleert: patient_id",
+        "gekuerzt: geraet",
+        "freitext: titel",
+        "freitext: ereignisse[0].text",
+        "freitext: ereignisse[0].marke.name",
+        "unbekannt: ereignisse[0].marke.lat",
+        "unbekannt: fremdes_feld",
+        "entfernt: _wiederherstellung",
+    }
+    assert deid.pruefen(tmp_path / "p001").ok
+
+
+def test_pruefen_findet_verschachtelte_personenfelder_und_unbekanntes(tmp_path):
+    (tmp_path / "p001").mkdir()
+    _schreibe(tmp_path / "p001" / ".backup_a.json", VOLL)
+    sitzung = {
+        "schema": "sitzung-v1",
+        "sitzung_id": "s1",
+        "start_utc": "1900-01-01T00:00:00Z",
+        "datum": "1900-01-01",
+        "patient_id": None,
+        "behandlung_id": None,
+        "titel": "",
+        "notiz": "",
+        "teilnehmer": [
+            {
+                "geraet": "Polar Sense 1AB84530",
+                "adresse": "AA:BB:CC:DD:EE:FF",
+                "geraet_profil": "verity_sense",
+                "intervall_quelle": "ppg_ppi",
+                "ordner": "VeritySense",
+                "datei": "sensor_a.json",
+                "n_schlaege": 3,
+            }
+        ],
+    }
+    _schreibe(tmp_path / "p001" / "sitzung_1.json", sitzung)
+    _schreibe(tmp_path / "p001" / "irgendwas.json", {"schema": "zukunft-v9", "x": 1})
+
+    bericht = deid.pruefen(tmp_path)
+    gruende = {}
+    for pfad, grund in bericht.ablehnungen:
+        gruende.setdefault(pfad.name, []).append(grund)
+    assert gruende[".backup_a.json"] == [
+        "Personenfeld gefüllt: behandlung_id, patient_id",
+        "Seriennummer im Gerätenamen: geraet",
+        "unbekannt" + "es Feld: ereignisse[0].marke.lat, fremdes_feld",
+        "Personenfeld gefüllt: _wiederherstellung.subject_id",
+    ]
+    assert gruende["sitzung_1.json"] == [
+        "Personenfeld gefüllt: teilnehmer[0].adresse",
+        "Seriennummer im Gerätenamen: teilnehmer[0].geraet",
+    ]
+    assert gruende["irgendwas.json"] == ["unbekanntes Dateiformat"]
+    hinweise = {p.name: h for p, h in bericht.hinweise}
+    assert "marke.name" in hinweise[".backup_a.json"]
+
+    # de-identifiziert ist die Sitzung sauber: Adresse null, Gerät gekürzt
+    (ziel,) = deid.deidentifizieren(tmp_path / "p001" / "sitzung_1.json", tmp_path / "p002")
+    kopie = json.loads(ziel.read_text(encoding="utf-8"))
+    assert kopie["teilnehmer"][0]["adresse"] is None
+    assert kopie["teilnehmer"][0]["geraet"] == "Polar Sense"
+    assert deid.pruefen(tmp_path / "p002").ok
+
+
+def test_unbekanntes_format_wird_nicht_geraten(tmp_path):
+    quelle = tmp_path / "irgendwas.json"
+    _schreibe(quelle, {"schema": "zukunft-v9", "x": 1})
+    with pytest.raises(ValueError):
+        deid.deidentifizieren(quelle, tmp_path / "p001")
+    assert not (tmp_path / "p001" / "irgendwas.json").exists()

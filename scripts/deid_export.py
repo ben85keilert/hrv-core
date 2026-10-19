@@ -5,9 +5,14 @@ Patientenordnern und schreibt ausschließlich die Kopie:
 
     python scripts/deid_export.py <messdatei…> --ziel $HRV_TESTDATA/p001 [--mit-beiwerk]
 
-Entfernt werden nur ``patient_id`` und ``behandlung_id``. Ziel ist der
-Testdatenordner im privaten Repo hrv-research, nie ein Ordner in hrv-core.
-Danach ``python scripts/pruefe_daten.py`` laufen lassen.
+Weißliste je Feld (`hrv_core.deid.REGELN`): Personenfelder werden ``null``,
+der Gerätename verliert seine Seriennummer, unbekannte Felder und der
+Backup-Block fallen weg, Freitext wird gemeldet — das Protokoll nennt nur
+Feldpfade, nie Inhalte. **Bewusst erhalten** bleiben ``start_utc``, ``datum``,
+``wall_time`` und der Dateiname mit der UTC-Startsekunde (Ben, 19.10.2026:
+Tagesdatum und Tageszeit sind für HRV-Aussagen wichtig); darum gehören die
+Kopien nur in den Testdatenordner des privaten Repos hrv-research, nie in
+hrv-core. Danach ``python scripts/pruefe_daten.py`` laufen lassen.
 """
 
 from __future__ import annotations
@@ -38,11 +43,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ueberschreiben", action="store_true")
     args = parser.parse_args(argv)
     for quelle in args.messdateien:
+        protokoll: list[tuple[Path, str]] = []
         ziele = deidentifizieren(
-            quelle, args.ziel, mit_beiwerk=args.mit_beiwerk, ueberschreiben=args.ueberschreiben
+            quelle,
+            args.ziel,
+            mit_beiwerk=args.mit_beiwerk,
+            ueberschreiben=args.ueberschreiben,
+            protokoll=protokoll,
         )
         for ziel in ziele:
             print(f"geschrieben: {ziel}")
+            for pfad, meldung in protokoll:
+                if pfad == ziel:
+                    print(f"    {meldung}")
     return 0
 
 
