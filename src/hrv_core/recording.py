@@ -117,6 +117,10 @@ class Recording:
     beats: list[Beat] = field(default_factory=list)
     geraet: str = "Unbekannt"
     geraet_profil: str = "ble_generic"
+    # BLE-Adresse des Geräts (MAC, auf macOS/iOS eine UUID) — getrennt vom Namen, weil
+    # ein Gurt ohne Bluetooth-Namen sonst die Adresse als Namen trüge (Ben, 19.10.2026).
+    # Pseudo-Identifikator des Geräts: `deid` leert das Feld. None = nicht bekannt.
+    adresse: str | None = None
     intervall_quelle: str = QUELLE_EKG_RR
     # None heißt: aus Quelle und tatsächlichem Inhalt ableiten. Eine feste
     # Vorgabe wäre gefährlich — eine Uhr ohne RR-Intervalle würde sonst als
@@ -197,8 +201,10 @@ class Recording:
         ['geraet_profil', 'intervall_quelle', 'datenqualitaet']
         >>> list(doc)[-6:]
         ['ecg_aufzeichnung', 'ppg_aufzeichnung', 'titel', 'notiz', 'ereignisse', 'messungen']
-        >>> "ppi_pakete" in doc
-        False
+        >>> "ppi_pakete" in doc, "adresse" in doc
+        (False, False)
+        >>> Recording(adresse="E2:B4:CC:3F:08:44").to_dict()["adresse"]
+        'E2:B4:CC:3F:08:44'
         >>> "schema" in Recording(schema=None).to_dict()  # Altdatei ohne Schema bleibt ohne
         False
         """
@@ -225,6 +231,8 @@ class Recording:
             del doc["schema"]
         if self.ppi_pakete is not None:
             doc["ppi_pakete"] = self.ppi_pakete
+        if self.adresse:  # nur wenn bekannt — Dateien ohne Adresse bleiben byteidentisch
+            doc["adresse"] = self.adresse
         doc["titel"] = self.titel
         doc["notiz"] = self.notiz
         doc["ereignisse"] = self.ereignisse
@@ -264,6 +272,7 @@ class Recording:
             "ecg_aufzeichnung",
             "ppg_aufzeichnung",
             "ppi_pakete",
+            "adresse",
             "titel",
             "notiz",
             "ereignisse",
@@ -290,6 +299,7 @@ class Recording:
             beats=beats,
             geraet=str(doc.get("geraet") or "Unbekannt"),
             geraet_profil=str(doc.get("geraet_profil") or "ble_generic"),
+            adresse=(str(a) if (a := doc.get("adresse")) else None),
             intervall_quelle=quelle,
             datenqualitaet=(str(d) if (d := doc.get("datenqualitaet")) else None),
             start_utc=start,

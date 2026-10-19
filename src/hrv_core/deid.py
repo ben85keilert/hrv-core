@@ -54,6 +54,12 @@ _KORRIGIERT = re.compile(r"__c\d+\.json$")
 #: („Polar H10 A1B2C3D4“, „Polar Sense 1AB84530“). Mindestens 6 Zeichen, nur
 #: Großbuchstaben/Ziffern, mindestens eine Ziffer — „H10“, „nsr001“, „SYNTH“ nicht.
 _SERIENNUMMER = re.compile(r"^(?=.*\d)[0-9A-Z]{6,}$")
+#: BLE-Adresse (MAC `E2:B4:CC:3F:08:44`) oder Geräte-UUID (macOS/iOS) — landet im
+#: Gerätenamen, wenn ein Gurt keinen Bluetooth-Namen meldet (trainingsapp bis 19.10.2026).
+_ADRESSE = re.compile(
+    r"^(?:(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}"
+    r"|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})$"
+)
 
 # -- Weißliste ------------------------------------------------------------------
 #: Regeln je Feld: KEEP (bleibt), NULL (wird None), FREITEXT (bleibt, gemeldet),
@@ -82,6 +88,7 @@ RAW_REGELN: dict[str, Any] = {
     "datum": KEEP,
     "geraet": GERAET,
     "geraet_profil": KEEP,
+    "adresse": NULL,  # BLE-MAC: Pseudo-Identifikator des Geräts
     "intervall_quelle": KEEP,
     "datenqualitaet": KEEP,
     "simulation": KEEP,
@@ -251,16 +258,26 @@ def beiwerk(messdatei: Path) -> list[Path]:
 
 
 def geraet_modell(name: Any) -> Any:
-    """Gerätename ohne Seriennummer am Ende.
+    """Gerätename ohne Seriennummer oder BLE-Adresse am Ende.
+
+    Besteht der Name nur aus der Adresse (Gurt ohne Bluetooth-Namen), bleibt
+    ``Unbekannt`` — der Gerätetyp ist dann wirklich nicht bekannt.
 
     >>> geraet_modell("Polar H10 A1B2C3D4"), geraet_modell("Polar Sense 1AB84530")
     ('Polar H10', 'Polar Sense')
     >>> geraet_modell("Polar H10"), geraet_modell("PhysioNet nsr001"), geraet_modell(None)
     ('Polar H10', 'PhysioNet nsr001', None)
+    >>> geraet_modell("E2:B4:CC:3F:08:44"), geraet_modell("TICKR E2-B4-CC-3F-08-44")
+    ('Unbekannt', 'TICKR')
+    >>> geraet_modell("Gurt 12345678-1234-1234-1234-123456789abc")
+    'Gurt'
     """
     if not isinstance(name, str):
         return name
     teile = name.split()
+    if teile and _ADRESSE.match(teile[-1]):
+        teile = teile[:-1]
+        return " ".join(teile) or "Unbekannt"
     if len(teile) >= 2 and _SERIENNUMMER.match(teile[-1]):
         return " ".join(teile[:-1])
     return name
@@ -452,7 +469,7 @@ def _datei_pruefen(daten: dict, datei: Path, bericht: Pruefbericht) -> None:
         )
     if "gekuerzt" in nach_art:
         bericht.ablehnungen.append(
-            (datei, "Seriennummer im Gerätenamen: " + ", ".join(nach_art["gekuerzt"]))
+            (datei, "Seriennummer oder Adresse im Gerätenamen: " + ", ".join(nach_art["gekuerzt"]))
         )
     if "unbekannt" in nach_art or "falscher_typ" in nach_art:
         felder = nach_art.get("unbekannt", []) + nach_art.get("falscher_typ", [])

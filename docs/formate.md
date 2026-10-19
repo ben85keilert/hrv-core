@@ -22,7 +22,8 @@ während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxi
 |---|---|---|
 | `behandlung_id`, `patient_id` | ja (vom Aufrufer, sonst `null`) | Personenfelder — `deid` leert sie |
 | `datum` | ja | **Ortsdatum** des Starts (Vertrag §7) |
-| `geraet`, `geraet_profil`, `intervall_quelle` | ja | `geraet` = BLE-Name, meist mit Seriennummer (`deid.geraet_modell` kürzt) |
+| `geraet`, `geraet_profil`, `intervall_quelle` | ja | `geraet` = BLE-Name, meist mit Seriennummer (`deid.geraet_modell` kürzt; eine Adresse als Name wird `Unbekannt`) |
+| `adresse` | nur wenn bekannt (seit 19.10.2026) | BLE-Adresse des Geräts (MAC, auf macOS/iOS UUID), getrennt vom Namen — Pseudo-Identifikator, `deid` leert sie; Dateien ohne Adresse haben den Schlüssel nicht |
 | `datenqualitaet` | ja | Erweiterung der trainingsapp: `rr_ekg`, `ppi_optisch`, `bpm_only` (`Recording.effektive_qualitaet`) |
 | `simulation`, `generator_config` | ja | Synthetik liegt unter `Messungen/Generator` (`messordner`) |
 | `schema`, `analyzed` | wie gelesen; neu `raw-v1`/`false` | Altdateien ohne `schema` bleiben ohne (F16) |

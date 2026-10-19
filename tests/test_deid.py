@@ -219,7 +219,7 @@ def test_pruefen_findet_verschachtelte_personenfelder_und_unbekanntes(tmp_path):
         gruende.setdefault(pfad.name, []).append(grund)
     assert gruende[".backup_a.json"] == [
         "Personenfeld gefüllt: behandlung_id, patient_id",
-        "Seriennummer im Gerätenamen: geraet",
+        "Seriennummer oder Adresse im Gerätenamen: geraet",
         "unbekannt" + "es Feld: ereignisse[0].marke.lat, fremdes_feld",
         "Personenfeld gefüllt: _wiederherstellung.subject_id",
     ]
@@ -245,3 +245,31 @@ def test_unbekanntes_format_wird_nicht_geraten(tmp_path):
     with pytest.raises(ValueError):
         deid.deidentifizieren(quelle, tmp_path / "p001")
     assert not (tmp_path / "p001" / "irgendwas.json").exists()
+
+
+def test_adresse_wird_geleert_und_adresse_als_name_wird_unbekannt(tmp_path):
+    """Gurt ohne Bluetooth-Namen: trainingsapp schrieb die MAC als `geraet` (19.10.2026).
+    Seitdem steht die Adresse getrennt in `adresse`; beides darf die Kopie nicht tragen."""
+    roh = dict(ROH, patient_id=None, behandlung_id=None, geraet="E2:B4:CC:3F:08:44")
+    roh["adresse"] = "E2:B4:CC:3F:08:44"
+    kopie, meldungen = deid.deidentifizieren_dict(roh, "sensor_1900-01-01_000000.json")
+    assert kopie["geraet"] == "Unbekannt"
+    assert kopie["adresse"] is None
+    assert "gekuerzt: geraet" in meldungen and "geleert: adresse" in meldungen
+
+    (tmp_path / "selbst").mkdir()
+    _schreibe(tmp_path / "selbst" / "sensor_mac.json", dict(roh, adresse=None))
+    _schreibe(tmp_path / "selbst" / "sensor_ok.json", dict(kopie))
+    bericht = deid.pruefen(tmp_path)
+    gruende = {p.name: g for p, g in bericht.ablehnungen}
+    assert "Adresse im Gerätenamen: geraet" in gruende["sensor_mac.json"]
+    assert "sensor_ok.json" not in gruende
+
+
+def test_adresse_ueberlebt_den_round_trip_und_fehlt_ohne_wert():
+    from hrv_core.recording import Recording
+
+    rec = Recording.from_dict(dict(ROH, adresse="E2:B4:CC:3F:08:44"))
+    assert rec.adresse == "E2:B4:CC:3F:08:44" and "adresse" not in rec.extra
+    assert rec.to_dict()["adresse"] == "E2:B4:CC:3F:08:44"
+    assert "adresse" not in Recording.from_dict(ROH).to_dict()

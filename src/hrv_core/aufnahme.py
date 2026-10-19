@@ -58,6 +58,7 @@ class Aufnahme:
     Args:
         geraet: Anzeigename, i. d. R. der BLE-Gerätename.
         geraet_profil: Profil-ID (``polar_h10``, ``verity_sense`` …).
+        adresse: BLE-Adresse des Geräts, getrennt vom Namen (``deid`` leert sie).
         intervall_quelle: ``ekg_rr`` oder ``ppg_ppi``.
         start_mono: Nullpunkt der Wanduhr — derselbe Uhrtyp wie ``t_capture``
             (``time.monotonic()``), nie ``datetime.now()``.
@@ -95,11 +96,13 @@ class Aufnahme:
         start_utc: datetime,
         ppi: bool = False,
         simulation: bool = False,
+        adresse: str | None = None,
     ) -> None:
         if start_utc.tzinfo is None:
             raise ValueError("start_utc braucht eine Zeitzone (UTC)")
         self.geraet = geraet
         self.geraet_profil = geraet_profil
+        self.adresse = adresse
         self.intervall_quelle = intervall_quelle
         self.start_mono = float(start_mono)
         self.start_utc = start_utc.astimezone(UTC)
@@ -199,6 +202,7 @@ class Aufnahme:
             beats=list(self._beats),
             geraet=self.geraet,
             geraet_profil=self.geraet_profil,
+            adresse=self.adresse,
             intervall_quelle=self.intervall_quelle,
             start_utc=self.start_utc,
             patient_id=self.patient_id,
