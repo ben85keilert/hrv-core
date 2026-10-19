@@ -225,7 +225,7 @@ def test_pruefen_findet_verschachtelte_personenfelder_und_unbekanntes(tmp_path):
     ]
     assert gruende["sitzung_1.json"] == [
         "Personenfeld gefüllt: teilnehmer[0].adresse",
-        "Seriennummer im Gerätenamen: teilnehmer[0].geraet",
+        "Seriennummer oder Adresse im Gerätenamen: teilnehmer[0].geraet",
     ]
     assert gruende["irgendwas.json"] == ["unbekanntes Dateiformat"]
     hinweise = {p.name: h for p, h in bericht.hinweise}
@@ -255,7 +255,7 @@ def test_adresse_wird_geleert_und_adresse_als_name_wird_unbekannt(tmp_path):
     kopie, meldungen = deid.deidentifizieren_dict(roh, "sensor_1900-01-01_000000.json")
     assert kopie["geraet"] == "Unbekannt"
     assert kopie["adresse"] is None
-    assert "gekuerzt: geraet" in meldungen and "geleert: adresse" in meldungen
+    assert ("gekuerzt", "geraet") in meldungen and ("geleert", "adresse") in meldungen
 
     (tmp_path / "selbst").mkdir()
     _schreibe(tmp_path / "selbst" / "sensor_mac.json", dict(roh, adresse=None))
