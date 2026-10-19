@@ -30,7 +30,7 @@ während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxi
 | `batterie_prozent`, `ecg_aufzeichnung`, `ppg_aufzeichnung` | ja | |
 | `ppi_pakete` | nur Geräte mit PPI | Vertrag 3b; `ppi.py` leitet daraus Zeitachse, Nähte, Wiederaufnahme ab |
 | `titel`, `notiz` | ja | Freitext; `ereignisse.metadaten_schreiben` darf nur diese und `ereignisse` ändern |
-| `ereignisse[]` | ja | Notizanker (`ereignisse.py`): `beat_index`, `dt_s`, `t_wall_s`, `t_s`, `wall_time`, `text`; Erweiterungen `uebungen[]` (Kurzcodes) und `marke` (`MARKE_FELDER`: `quelle`, `art`, `spur`, `einheit`, `name`, `runde`, `von`, `zaehlt`, `soll_s`, `profil`); alt: `chart_x` |
+| `ereignisse[]` | ja | Notizanker (`ereignisse.py`): `beat_index`, `dt_s`, `t_wall_s`, `t_s`, `wall_time`, `text`; Erweiterungen `uebungen[]` (Kurzcodes) und `marke` (`MARKE_FELDER`: `quelle`, `art`, `spur`, `einheit`, `name`, `runde`, `von`, `zaehlt`, `soll_s`, `profil`, seit 19.10.2026 `feld` und `wert` für `person/leistung`); alt: `chart_x` |
 | `messungen[]` | ja | `t_s` (Herzuhr), `t_wall_s`/`tw_src` (Wanduhr, `m`/`r`/`g`), `hf_bpm`, `rr_ms` |
 | `hrv`, `quality` | nein (alte praxis_gui-Dateien) | bleiben über `extra` erhalten |
 

@@ -56,9 +56,10 @@ METADATEN: tuple[str, ...] = ("titel", "notiz", "ereignisse")
 
 #: Felder einer Marke (``marke`` im Ereignis, Vertrag Abschnitt 4), in dieser Folge:
 #:
-#: - ``quelle``: wer sie setzte — ``einheit``, ``timer``, ``plan``, ``gps``
+#: - ``quelle``: wer sie setzte — ``einheit``, ``timer``, ``plan``, ``gps``, ``person``
 #: - ``art``: ``start``, ``ende``, ``abschnitt``, ``pause``, ``weiter``,
-#:   ``uebung_start``, ``uebung_ende``, ``km``
+#:   ``uebung_start``, ``uebung_ende``, ``km``; von der Person ``leistung`` („geleistet
+#:   bis hierher“ — die Tippzeit, nie der Beginn) und ``abschluss`` (trainingsapp, 19.10.2026)
 #: - ``spur``: die Abschnittsspur, die sie teilt (``timer``, ``uebung``, ``km``)
 #: - ``einheit``: Kennung des gemeinsamen Ablaufs in der App (ihre Zeitleiste)
 #: - ``name``: Abschnittsname ohne Zusatz („Belastung“); ``runde``/``von``: Runde r von n
@@ -66,6 +67,9 @@ METADATEN: tuple[str, ...] = ("titel", "notiz", "ereignisse")
 #: - ``soll_s``: die geplante Dauer des Abschnitts (s) — fehlt bei der Stoppuhr
 #: - ``profil``: welcher Ablauf lief — Kurzcode der Profil-ID, die Stoppuhr ``stoppuhr``
 #:   (trainingsapp, 18.10.2026: vergleichbar über Tage, auch nach Umbenennen)
+#: - ``feld``, ``wert``: bei ``person/leistung`` das Feld der Übung (``reps``, ``hold``)
+#:   und der eingetragene Wert — so lässt sich die Erholung nach 50 gegen 30
+#:   Wiederholungen auswerten, ohne Tabellen über die Zeit abzugleichen (19.10.2026)
 MARKE_FELDER: tuple[str, ...] = (
     "quelle",
     "art",
@@ -77,6 +81,8 @@ MARKE_FELDER: tuple[str, ...] = (
     "zaehlt",
     "soll_s",
     "profil",
+    "feld",
+    "wert",
 )
 
 
@@ -92,6 +98,8 @@ def marke_bereinigen(marke: Any) -> dict[str, Any]:
     {'quelle': 'timer', 'soll_s': 60, 'profil': '7KQ4M2XA'}
     >>> marke_bereinigen(None)
     {}
+    >>> marke_bereinigen({"quelle": "person", "art": "leistung", "feld": "reps", "wert": 12})
+    {'quelle': 'person', 'art': 'leistung', 'feld': 'reps', 'wert': 12}
     >>> marke_bereinigen({"quelle": "gps", "soll_s": float("nan")})  # kein gültiges JSON
     {'quelle': 'gps'}
     """
