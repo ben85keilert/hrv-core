@@ -59,6 +59,11 @@ Nähten keine Differenz übrig (`n_diffs = 0`, etwa ein kurzer Abschnitt mit
 einer Naht in der Mitte), sind `rmssd` und `pnn50` `None` — bis dahin stand
 dort 0,0, und ein Abschnitt zeigte „RMSSD 0“ (Befund R17).
 
+Gegen `neurokit2.hrv_time` belegt (`tests/referenz/`, T7): Ø RR und RMSSD
+bit-gleich; SDNN dort mit `ddof=1` (Faktor `√(n/(n−1))`); pNN50 zählt bei
+beiden strikt `> 50`, neurokit2 teilt aber durch die Zahl der Intervalle,
+hrv-core (wie praxis_gui) durch die Zahl der Differenzen.
+
 ---
 
 ## Der Boundary-Skip
@@ -110,8 +115,10 @@ Malik, Ketten.
 Ergebnis am 13.10.: Die Automatik schlägt genau zwei Ausschlüsse vor (die
 beiden Störungen); danach **1119 statt 719 Schläge, RMSSD 50,0 statt
 47,6 ms**, SDNN 93,2 statt 92,4 ms. Golden-Test:
-`tests/test_korrektur_regeln.py` (synthetisch, RMSSD 21,8946 ms über alle 299
-Nachbardifferenzen, unabhängig nachgerechnet).
+`tests/test_ppi_naehte.py` (`test_golden_rmssd_nur_ueber_echte_nachbarn`:
+synthetische Verity-Datei, RMSSD 21,7432 ms nur über echte Nachbarn gegen
+22,9058 ms über alle Differenzen, unabhängig nachgerechnet) und die Variante
+`selbst` im Golden Master (`tests/golden/trainingsapp/`).
 
 Live gilt dasselbe (`LiveFenster.regeln_setzen`): Gespeichert ist je Punkt das
 Blocker-Bit, nicht das Urteil — Umschalten wirkt sofort auf den ganzen Puffer.
@@ -389,9 +396,9 @@ beim Verity Sense nur alle 5 s aktualisiert.
 
 ### Atemfrequenz (`src/hrv_core/atmung.py`, ATEM_VERSION 1)
 
-**Gemeinsames Modul mit praxis_gui** — byteidentisch in beiden Projekten
-(`praxislab/sensors/polar_h10/atmung.py`); je ein Test vergleicht die Bytes
-(`PRAXIS_GUI_PFAD` hier, `TRAININGSAPP_PFAD` dort). Nur numpy.
+**Gemeinsames Modul beider Apps** — seit dem Umzug (16.10.2026) rufen praxis_gui
+und trainingsapp `hrv_core.atmung` auf; vorher lagen byteidentische Kopien in
+beiden Projekten, die ein Byte-Vergleichstest zusammenhielt. Nur numpy.
 
 **Prüfung statt Schätzung.** Der höchste Gipfel im Atemband ist im Sitzen oft
 die Mayer-Welle der Blutdruckregulation (0,1 Hz ≙ 6/min). praxis_gui lag damit
@@ -593,9 +600,11 @@ zählte der 0,04-Bin zum VLF, der 0,4-Bin zum HF; Befund R23).
 Kürzere Messungen rechnen unverändert (Golden-Tests). Die **VLF-Kurve**
 (`vlf_power`, Fenster 20/30/60 min) rechnet je Fenster ebenso sparsam
 (`frequency.vlf_fenster`: 2-s-Mittel, Hann, Raster nur 0,003–0,04 Hz); **ULF**
-gibt es nur als Wert der ganzen Aufzeichnung (ab 4 h). Über Stunden zeichnet die
-Poincaré-Wolke höchstens 2500 Punkte (gerechnet wird mit allen), und die
-Atemfrequenz der Aufzeichnung nimmt höchstens 2000 Minutenfenster.
+gibt es nur als Wert der ganzen Aufzeichnung (ab 4 h). `atmung.fenster` und
+`atmung.median` rechnen alle Minutenfenster der Aufzeichnung ohne Deckel
+(8 h ≈ 1900 Fenster in rund 2 s, 24 h ≈ 5800); wie viele Punkte die
+Poincaré-Wolke zeichnet, entscheidet die App (trainingsapp: 2500, gerechnet
+wird mit allen).
 
 ### Abschnitte (ALGO_VERSION 7, 15.10.2026)
 
@@ -685,8 +694,9 @@ gibt es gar kein Poincaré-Ergebnis.
 Skalen 4–16 Schläge, Fenster 200 Schläge. Rechnung wie `neurokit2.fractal_dfa`
 (das praxis_gui nutzt): Profil `cumsum(rr − mean)`, Boxen um `n // 2` versetzt
 (50 % Überlappung), je Box eine Gerade abziehen, `F(n) = √(Mittel der
-Varianzen)`, α1 = Steigung von `log₂ F` über `log₂ n`. Golden-Test gegen
-neurokit2 auf 12 Stellen (`tests/test_nichtlinear.py`).
+Varianzen)`, α1 = Steigung von `log₂ F` über `log₂ n`. Referenztest gegen
+`neurokit2.fractal_dfa` auf 10 Stellen (`tests/referenz/test_referenz_scipy_nk2.py`,
+Gruppe `referenz`); Golden Master in `tests/golden/trainingsapp/`.
 
 ```
 α1 ≈ 0.5     unkorreliertes Rauschen — starke Erschöpfung

@@ -79,6 +79,8 @@ TA ist der neue Standard; praxis_gui ändert sich an diesen Stellen. Vorher/Nach
 | Dateiname | UTC-Start | lokale Stoppzeit | Format-Frage, nicht Algorithmus; Phase 3 praxis_gui? | |
 | `__cNN` in Messungsliste | nicht gelistet | gelistet | App-Frage | |
 | Expertenmodus live | Regeln wirken live (`LiveFenster.regeln_setzen`) | feste Grenzen | praxis_gui-Live nutzt `LiveFenster`? | |
+| Randartefakte (ALGO 8, 19.10.2026) | Kette mit nur einem oder keinem Anker → ausschließen; ein `interpolate` ohne zwei Anker wirkt wie `delete` | Plateau aus dem einzigen Nachbarn; ohne Anker bleibt der Rohwert | praxis_gui zeigt für denselben Sidecar am Rand ein Plateau, hrv-core eine Lücke (`docs/korrektur.md`) | Ben, 19.10.2026: lieber Lücke |
+| `None` statt 0 (ALGO 8) | RMSSD/pNNx ohne Differenz, SD1/SD2 ohne SD2, Band ohne Teilspektrum: `None` | 0,0 | Anzeige „–“ statt 0 | Ben, 19.10.2026 |
 
 ## D. Nur praxis_gui — braucht Entscheidung
 

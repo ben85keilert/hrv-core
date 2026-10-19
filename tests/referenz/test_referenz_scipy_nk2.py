@@ -118,3 +118,41 @@ def test_spektrogramm_wie_scipy(name: str) -> None:
         maske = f <= 0.5
         np.testing.assert_allclose(sg["freq_hz"], f[maske], rtol=1e-12)
         np.testing.assert_allclose(sg["power_ms2"][:, j], p[maske], rtol=1e-9, atol=1e-9 * p.max())
+
+
+@pytest.mark.parametrize("name", DATEIEN)
+def test_zeitbereich_gegen_neurokit2_hrv_time(name: str) -> None:
+    """Beleg der dokumentierten Abweichungen (docs/hrv_algorithmen.md, Zeitbereich):
+    Ø RR und RMSSD bit-gleich; SDNN bei nk2 mit ddof=1 (hrv-core: ddof=0, wie
+    praxis_gui); pNN50 zählt beide strikt ``> 50``, nk2 teilt aber durch die Zahl
+    der Intervalle, hrv-core durch die Zahl der Differenzen (n − 1)."""
+    from hrv_core.time_domain import compute_time_domain
+
+    rr = _rr(name)
+    t = np.cumsum(rr) / 1000.0
+    soll = nk.hrv_time({"RRI": rr, "RRI_Time": t}, sampling_rate=1000).iloc[0]
+    ist = compute_time_domain(rr, skip_seams=False)
+    assert ist is not None
+    n = ist["n"]
+    assert ist["mean_rr"] == pytest.approx(float(soll["HRV_MeanNN"]), rel=1e-12)
+    assert ist["rmssd"] == pytest.approx(float(soll["HRV_RMSSD"]), rel=1e-12)
+    assert ist["sdnn"] * np.sqrt(n / (n - 1)) == pytest.approx(float(soll["HRV_SDNN"]), rel=1e-12)
+    assert ist["pnn50"] * ist["n_diffs"] / n == pytest.approx(float(soll["HRV_pNN50"]), rel=1e-12)
+
+
+@pytest.mark.parametrize("name", DATEIEN)
+def test_lomb_hann_wie_scipy_mit_gefensterten_werten(name: str) -> None:
+    """`_lomb_hann` (langer Weg, VLF) ist scipy-Lomb über die Hann-gefensterten,
+    mittelwertfreien Werte, geteilt durch das Mittel von w² (Energieverlust)."""
+    from hrv_core.frequency import _lomb_hann
+
+    t, rr = _reihe(name)
+    spanne = float(t[-1] - t[0])
+    f = np.arange(1.0 / spanne, 0.5, 1.0 / spanne)
+    ist = _lomb_hann(t, rr, f)
+    w = 0.5 - 0.5 * np.cos(2 * np.pi * (t - t[0]) / spanne)
+    y = (rr - rr.mean()) * w
+    y = y - y.mean()  # lomb_psd zieht den Mittelwert der gefensterten Werte ab
+    soll = scipy_signal.lombscargle(t, y, 2 * np.pi * f, normalize=False)
+    soll = soll * 2.0 * spanne / y.size / float(np.mean(w * w))
+    np.testing.assert_allclose(ist, soll, rtol=1e-9, atol=1e-9 * soll.max())

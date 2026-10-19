@@ -45,6 +45,7 @@ uv run python scripts/pruefe_daten.py              # $HRV_TESTDATA auf Personenb
 uv run python scripts/pruefe_daten.py --ohne-ordnerregel tests/fixtures
 uv run python scripts/deid_export.py <messdatei> --ziel $HRV_TESTDATA/p001   # nur Ben, lokal
 uv run python scripts/golden_erneuern.py           # nur nach begründeter Algorithmusänderung
+uv run python scripts/fixture_synth_lang.py       # synthetische 5000-s-Fixture neu erzeugen (Seed fest)
 uv run python scripts/vergleich_praxis_gui.py      # docs/VERGLEICH_ZAHLEN.md neu erzeugen
 ```
 
@@ -96,5 +97,6 @@ uv run python scripts/vergleich_praxis_gui.py      # docs/VERGLEICH_ZAHLEN.md ne
 Fensterspektrum, Spektrogramm), `nonlinear` (Poincaré, DFA α1, SampEn), `atmung`
 (Prüfkette, Fenster, Median), `spektralprofil`, `trends` (Verlaufskurven), `ausschnitte`
 (Crop, Abschnitte), `ppi`/`zeitachse` (Verity Sense), `live`, `ereignisse` (Notiz-Anker),
-`referenz` (alles auf einmal, Grundlage der Golden Master), `deid`. Formeln und Fallstricke:
-`docs/hrv_algorithmen.md`, `docs/korrektur.md`.
+`referenz` (alles auf einmal, Grundlage der Golden Master), `deid` (Weißliste je Format).
+Formeln und Fallstricke: `docs/hrv_algorithmen.md`, `docs/korrektur.md`; welche Felder die
+Bibliothek liest und schreibt: `docs/formate.md`.

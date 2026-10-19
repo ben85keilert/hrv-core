@@ -74,7 +74,6 @@ AUFNAHME_RR_MAX_MS: Final[int] = 2000
 MIN_BEATS_TIME: Final[int] = 2  # RMSSD braucht mindestens 2 Intervalle
 MIN_BEATS_NONLINEAR: Final[int] = 30  # SD1/SD2 werden erst ab ~30 Schlägen stabil
 MIN_BEATS_FREQUENCY: Final[int] = 60  # ~1 min bei 60 bpm — Untergrenze für HF
-RECOMMENDED_BEATS_FREQUENCY: Final[int] = 180
 MIN_BEATS_DFA: Final[int] = 200  # DFA α1 arbeitet schlagbasiert
 MIN_BEATS_SEGMENT: Final[int] = 60  # kürzere Teilstücke gehen nicht ins Spektrum
 
@@ -146,8 +145,7 @@ VLF_MITTEL_S: Final[float] = 2.0
 #: Langer Weg, ULF (unter 0,003 Hz): ganze Länge aus 30-s-Mitteln, df = 1/T
 ULF_MITTEL_S: Final[float] = 30.0
 ULF_MAX_BINS: Final[int] = 4000
-WELCH_NPERSEG: Final[int] = 256
-WELCH_OVERLAP: Final[float] = 0.5
+WELCH_NPERSEG: Final[int] = 256  # Überlappung fest nperseg − nperseg // 2 (`welch_psd`)
 
 # ---------------------------------------------------------------------------
 # Nichtlineare Kennzahlen
@@ -155,7 +153,6 @@ WELCH_OVERLAP: Final[float] = 0.5
 DFA_SCALE_MIN: Final[int] = 4  # Skalen 4..16 Schläge = klinischer α1-Bereich
 DFA_SCALE_MAX: Final[int] = 16
 DFA_WINDOW_N: Final[int] = MIN_BEATS_DFA
-DFA_DETREND_BOX: Final[int] = 10
 
 SAMPEN_M: Final[int] = 2
 SAMPEN_R_FACTOR: Final[float] = 0.2
