@@ -62,7 +62,7 @@ from .ppi import (
     ppi_zeilen,
     schlagzeiten,
 )
-from .recording import Recording, json_atomar_schreiben
+from .recording import Recording, json_atomar_schreiben, laden
 from .regeln import Korrekturregeln
 from .time_domain import compute_time_domain
 
@@ -1038,11 +1038,127 @@ def analyse_regeln(rec_pfad: Path) -> Korrekturregeln | None:
     )
 
 
+# -- Der Stand der Korrektur einer Messung: Datei + Sidecar + Regeln ---------------
+
+
+@dataclass
+class Korrekturstand:
+    """Messdatei, Analysebasis, Vorschläge und die geltende Auswahl — wie die
+    Auswertung sie zeigt (`korrektur_laden`).
+
+    ``regeln`` sind die der gespeicherten Korrektur (``gespeicherte_regeln``),
+    sonst die übergebene Vorgabe; ``basis`` folgt ihnen (`analysebasis`),
+    ``ketten`` sind die Vorschläge der Automatik darauf (`vorschlaege`), und
+    ``uebernommen`` sind die Indizes der Ketten, die gelten (`auswahl_aus`).
+    Eine Kette, die nicht übernommen ist, heißt: Der Rohwert zählt.
+    """
+
+    rec: Recording
+    regeln: Korrekturregeln
+    gespeicherte_regeln: Korrekturregeln | None
+    basis: Wiederaufnahme
+    ketten: list[Kette]
+    sidecar: Sidecar
+    uebernommen: set[int]
+
+    @property
+    def veraltet(self) -> bool:
+        """Das Sidecar gehört zu einer anderen oder veränderten Messdatei (R16)."""
+        return self.sidecar.veraltet
+
+    @property
+    def gespeichert(self) -> list[Korrektur]:
+        """Die Korrekturen aus dem Sidecar — keine, wenn es nicht zur Messdatei passt."""
+        return [] if self.sidecar.veraltet else self.sidecar.korrekturen
+
+    def korrekturen(self) -> list[Korrektur]:
+        """Die Korrekturen der übernommenen Ketten, nach Kette geordnet."""
+        return [v for i in sorted(self.uebernommen) for v in self.ketten[i].vorschlag]
+
+    def anwenden(self) -> Korrigiert:
+        """Die korrigierte Reihe der Analysebasis (`anwenden`)."""
+        return anwenden(self.basis.rec, self.korrekturen())
+
+
+def auswahl_aus(
+    ketten: Sequence[Kette], gespeichert: Sequence[Korrektur], *, modus: str, ohne_sidecar: bool
+) -> set[int]:
+    """Welche Ketten gelten: die der gespeicherten Korrektur — ohne Sidecar die Vorauswahl.
+
+    Eine Kette ist übernommen, wenn einer ihrer Schläge in ``gespeichert``
+    korrigiert ist. ``ohne_sidecar`` (keine gespeicherten Regeln oder ein
+    veraltetes Sidecar) und nichts gespeichert: `vorauswahl` nach ``modus``.
+    Gespeicherte Regeln ohne Korrekturen heißen dagegen: Die Person hat
+    „Keine“ gewählt — dann bleibt alles roh.
+
+    >>> k = Korrektur("interpolate", 3, 2.4, 1700.0)
+    >>> kette = Kette(3, 3, [k], "interpolieren", False, "über 2000 ms")
+    >>> sorted(auswahl_aus([kette], [], modus="alle", ohne_sidecar=True))
+    [0]
+    >>> auswahl_aus([kette], [], modus="alle", ohne_sidecar=False)
+    set()
+    >>> sorted(auswahl_aus([kette], [k], modus="keine", ohne_sidecar=False))
+    [0]
+    """
+    if ohne_sidecar and not gespeichert:
+        return vorauswahl(ketten, modus)
+    indizes = {k.beat_index for k in gespeichert}
+    return {i for i, k in enumerate(ketten) if any(v.beat_index in indizes for v in k.vorschlag)}
+
+
+def korrekturstand(
+    rec_pfad: Path | str,
+    rec: Recording,
+    regeln: Korrekturregeln,
+    *,
+    gespeicherte_regeln: Korrekturregeln | None = None,
+) -> Korrekturstand:
+    """Der Stand zu **festen** Regeln — etwa nachdem die Person sie in der Auswertung
+    geändert hat: Analysebasis und Vorschläge neu, das Sidecar auf dieser Basis gelesen.
+
+    ``gespeicherte_regeln``: die des Sidecars, falls bekannt (`analyse_regeln`) —
+    ohne sie zählt das Sidecar als eines ohne Regeln (`auswahl_aus`).
+    """
+    rec_pfad = Path(rec_pfad)
+    basis = analysebasis(rec, regeln)
+    ketten = vorschlaege(basis.rec, regeln)
+    sidecar = analyse_lesen(rec_pfad, basis)
+    gespeichert = [] if sidecar.veraltet else sidecar.korrekturen
+    uebernommen = auswahl_aus(
+        ketten,
+        gespeichert,
+        modus=regeln.vorauswahl,
+        ohne_sidecar=gespeicherte_regeln is None or sidecar.veraltet,
+    )
+    return Korrekturstand(rec, regeln, gespeicherte_regeln, basis, ketten, sidecar, uebernommen)
+
+
+def korrektur_laden(
+    rec_pfad: Path | str, vorgabe: Korrekturregeln, *, rec: Recording | None = None
+) -> Korrekturstand:
+    """Messdatei und Sidecar lesen → der Stand der Korrektur, wie die Auswertung ihn zeigt.
+
+    Die Regeln sind die der gespeicherten Korrektur (`analyse_regeln`), sonst
+    ``vorgabe`` (die gerätelokale Vorgabe der App). ``rec``: die schon gelesene
+    Messdatei, sonst wird sie hier gelesen (`recording.laden`). Alles darin ist
+    Datei- und Rechenarbeit ohne Oberfläche — die App ruft es in einem Thread.
+
+    `Korrekturstand.anwenden` ist dann die korrigierte Reihe für Kennzahlen,
+    HRV je Kilometer und DFA-Verlauf — dieselbe wie in der Auswertung.
+    """
+    rec_pfad = Path(rec_pfad)
+    if rec is None:
+        rec = laden(rec_pfad)
+    gespeichert = analyse_regeln(rec_pfad)
+    return korrekturstand(rec_pfad, rec, gespeichert or vorgabe, gespeicherte_regeln=gespeichert)
+
+
 __all__ = [
     "OPS",
     "SCHEMA_ANALYSE",
     "Kette",
     "Korrektur",
+    "Korrekturstand",
     "Korrigiert",
     "Sidecar",
     "SidecarFehler",
@@ -1054,9 +1170,12 @@ __all__ = [
     "analysebasis",
     "anwenden",
     "auf_zeilen",
+    "auswahl_aus",
     "automatisch",
     "kennzahlen",
     "korr_zeiten",
+    "korrektur_laden",
+    "korrekturstand",
     "naehte",
     "rohfolge",
     "sidecar_veraltet",

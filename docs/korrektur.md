@@ -257,6 +257,22 @@ in `app_setting` (`hrv_korrektur`) und bleibt, bis man „Standardwerte“ tippt
 Eine neue Werksvorgabe erreicht ein Gerät mit gemerkter Vorgabe darum nicht von
 selbst.
 
+## Eine Messung korrigiert laden
+
+Was die Auswertung beim Öffnen tut — Messdatei lesen, Regeln des Sidecars oder
+die Vorgabe nehmen, Analysebasis bilden, Vorschläge rechnen, Sidecar auf dieser
+Basis lesen, Auswahl bestimmen — ist seit dem 19.10.2026 **eine** Funktion:
+`korrektur_laden(pfad, vorgabe)` liefert einen `Korrekturstand` (`rec`,
+`regeln`, `gespeicherte_regeln`, `basis`, `ketten`, `sidecar`, `uebernommen`);
+`Korrekturstand.anwenden()` ist die korrigierte Reihe. Die Regel der Auswahl
+(`auswahl_aus`): mit gespeicherter Korrektur gelten genau deren Ketten — auch
+„Keine“, wenn Regeln gespeichert sind, aber keine Korrektur —; ohne Sidecar,
+ohne gespeicherte Regeln (praxis_gui) und ohne Korrekturen oder bei veraltetem
+Sidecar (R16) gilt die `vorauswahl` der Regeln. `korrekturstand(pfad, rec,
+regeln)` ist dasselbe zu festen Regeln, wenn die Person sie in der Auswertung
+ändert. Beide Apps (Auswertung und HRV je Kilometer in trainingsapp) lesen so
+dieselbe Reihe; an der Mathematik ändert das nichts (kein ALGO_VERSION-Sprung).
+
 ---
 
 ## Verlauf

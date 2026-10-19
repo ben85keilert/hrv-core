@@ -560,3 +560,50 @@ def test_sidecar_meldet_veraltete_pruefsumme_statt_zu_werfen(tmp_path: Path) -> 
     # Sidecar ohne Prüfsumme (ältere praxis_gui-Fassung): kein Urteil
     analyse_pfad(roh).write_text(json.dumps({"schema": "analysis-v1", "corrections": []}))
     assert sidecar_veraltet(roh) is None and not analyse_lesen(roh).veraltet
+
+
+def test_korrektur_laden_wie_die_auswertung(tmp_path: Path) -> None:
+    """`korrektur_laden` (19.10.2026, trainingsapp H40): ohne Sidecar gilt die
+    Vorauswahl, mit gespeicherter Korrektur gelten deren Ketten — auch „Keine“ —,
+    bei veraltetem Sidecar wieder die Vorauswahl (R16)."""
+    from hrv_core.korrektur import korrektur_laden, korrekturstand, vorauswahl
+    from hrv_core.regeln import Korrekturregeln
+
+    roh = tmp_path / GOLDEN.name
+    shutil.copy(GOLDEN, roh)
+    vorgabe = Korrekturregeln(nullen=True)  # die Golden-Datei hat nur Nullen als Artefakt
+    stand = korrektur_laden(roh, vorgabe)
+    assert stand.regeln == vorgabe and stand.gespeicherte_regeln is None
+    assert not stand.sidecar.vorhanden and not stand.veraltet and stand.gespeichert == []
+    assert stand.ketten and stand.uebernommen == set(range(len(stand.ketten)))
+    assert stand.korrekturen() == [k for kette in stand.ketten for k in kette.vorschlag]
+    assert list(stand.anwenden().rr_ms) == list(
+        anwenden(stand.basis.rec, stand.korrekturen()).rr_ms
+    )
+
+    # Nur die erste Kette gespeichert, mit Regeln: genau sie gilt, die Regeln auch
+    regeln = Korrekturregeln(nullen=True, vorauswahl="sicher")
+    analyse_speichern(roh, stand.rec, stand.ketten[0].vorschlag, regeln=regeln, basis=stand.basis)
+    erneut = korrektur_laden(roh, vorgabe, rec=stand.rec)
+    assert erneut.gespeicherte_regeln == regeln and erneut.regeln == regeln
+    assert erneut.sidecar.vorhanden and erneut.uebernommen == {0}
+    assert [k.beat_index for k in erneut.gespeichert] == [
+        k.beat_index for k in stand.ketten[0].vorschlag
+    ]
+
+    # „Keine“ gespeichert (Regeln da, keine Korrektur): alles bleibt roh
+    analyse_speichern(roh, stand.rec, [], regeln=regeln, basis=stand.basis)
+    assert korrektur_laden(roh, vorgabe, rec=stand.rec).uebernommen == set()
+
+    # Veraltetes Sidecar (Messdatei verändert): nichts davon gilt, Vorauswahl der Regeln
+    roh.write_text(
+        roh.read_text(encoding="utf-8").replace('"rr_ms": 8', '"rr_ms": 9', 1), encoding="utf-8"
+    )
+    alt = korrektur_laden(roh, vorgabe)
+    assert alt.veraltet and alt.gespeichert == [] and alt.sidecar.vorhanden
+    assert alt.uebernommen == vorauswahl(alt.ketten, "sicher")
+
+    # Feste Regeln (die Person ändert sie in der Auswertung): Basis und Vorschläge dazu
+    fest = korrekturstand(roh, alt.rec, Korrekturregeln(malik_an=False))
+    assert fest.regeln.malik_an is False and fest.gespeicherte_regeln is None
+    assert fest.uebernommen == vorauswahl(fest.ketten, "alle")
