@@ -920,24 +920,70 @@ def _korrekturen_lesen(eintraege: Any) -> list[Korrektur]:
     return sorted(out, key=lambda k: k.beat_index)
 
 
-def analyse_laden(rec_pfad: Path, basis: Wiederaufnahme | None = None) -> list[Korrektur]:
-    """Die gespeicherten Korrekturen einer Messung; ``[]`` ohne (lesbares) Sidecar.
+@dataclass
+class Sidecar:
+    """Was `analyse_lesen` aus dem Sidecar holt — samt Urteil, ob es noch zur Messdatei passt.
+
+    ``veraltet``: ``source_file_sha1`` im Sidecar passt nicht zur Messdatei
+    (Befund R16). Dann gehören die Korrekturen zu einer anderen oder
+    nachträglich veränderten Datei — per ``beat_index`` träfen sie falsche
+    Schläge. Die Bibliothek wirft nicht, sie markiert; die App zeigt den
+    Hinweis (praxis_gui: ``sidecar_is_stale``). Ein Sidecar ohne Prüfsumme
+    gilt nicht als veraltet. ``vorhanden``: es gab ein lesbares Sidecar.
+    """
+
+    korrekturen: list[Korrektur]
+    vorhanden: bool = False
+    veraltet: bool = False
+    sha1_gespeichert: str | None = None
+
+
+def sidecar_veraltet(rec_pfad: Path | str) -> bool | None:
+    """``True``: das Sidecar trägt eine andere Prüfsumme als die Messdatei;
+    ``False``: passt; ``None``: kein lesbares Sidecar oder keine Prüfsumme darin.
+
+    Für `analyse_laden` wie für `ausschnitte.zusatz_lesen` — beide lesen dasselbe
+    Sidecar, die App fragt einmal beim Öffnen.
+    """
+    rec_pfad = Path(rec_pfad)
+    doc = _json_lesen(analyse_pfad(rec_pfad))
+    if not doc:
+        return None
+    return _veraltet(doc, rec_pfad)
+
+
+def _veraltet(doc: dict[str, Any], rec_pfad: Path) -> bool | None:
+    gespeichert = doc.get("source_file_sha1")
+    if not isinstance(gespeichert, str) or not gespeichert or not rec_pfad.is_file():
+        return None
+    return gespeichert.lower() != _sha1(rec_pfad)
+
+
+def analyse_lesen(rec_pfad: Path | str, basis: Wiederaufnahme | None = None) -> Sidecar:
+    """Die gespeicherten Korrekturen einer Messung mit Prüfsummen-Urteil (`Sidecar`).
 
     Einträge mit unbekannter Operation oder ohne gültigen Index werden
     übergangen — ein Sidecar aus einer neueren praxis_gui-Fassung soll lesbar
-    bleiben.
+    bleiben. Ohne (lesbares) Sidecar: keine Korrekturen, ``vorhanden=False``.
 
     Ohne ``basis`` zählen die Indizes in der Rohdatei. Mit ``basis`` zählen
     sie in der Analysebasis: ``corrections_ppi``, sofern sie noch zu
     ``corrections`` passt — hat praxis_gui die Korrekturen inzwischen
     geändert, gelten dessen ``corrections``, übertragen mit `von_zeilen`.
     """
-    doc = _json_lesen(analyse_pfad(Path(rec_pfad)))
+    rec_pfad = Path(rec_pfad)
+    doc = _json_lesen(analyse_pfad(rec_pfad))
     if not doc:
-        return []
+        return Sidecar([])
+    sha1 = doc.get("source_file_sha1")
+    kopf = {
+        "vorhanden": True,
+        "veraltet": bool(_veraltet(doc, rec_pfad)),
+        "sha1_gespeichert": sha1 if isinstance(sha1, str) else None,
+    }
     zeilen = _korrekturen_lesen(doc.get("corrections"))
     if basis is None or basis.aufgenommen == 0:
-        return zeilen
+        return Sidecar(zeilen, **kopf)
     ppi = [
         k for k in _korrekturen_lesen(doc.get("corrections_ppi")) if k.beat_index < len(basis.zeile)
     ]
@@ -945,8 +991,17 @@ def analyse_laden(rec_pfad: Path, basis: Wiederaufnahme | None = None) -> list[K
         n = sum(z is not None for z in basis.zeile)
         projektion = _eindeutig(auf_zeilen(ppi, basis, _zeilen_rec(basis, n)), n)
         if [_schluessel(k) for k in projektion] == [_schluessel(k) for k in zeilen]:
-            return ppi
-    return von_zeilen(zeilen, basis)
+            return Sidecar(ppi, **kopf)
+    return Sidecar(von_zeilen(zeilen, basis), **kopf)
+
+
+def analyse_laden(rec_pfad: Path, basis: Wiederaufnahme | None = None) -> list[Korrektur]:
+    """Nur die Korrekturen aus `analyse_lesen`; ``[]`` ohne (lesbares) Sidecar.
+
+    Ob das Sidecar noch zur Messdatei passt, sagt `analyse_lesen(...).veraltet`
+    oder `sidecar_veraltet` — hier wird nichts geprüft (unveränderte Schnittstelle).
+    """
+    return analyse_lesen(rec_pfad, basis).korrekturen
 
 
 def _zeilen_rec(basis: Wiederaufnahme, n: int) -> Recording:
@@ -989,8 +1044,10 @@ __all__ = [
     "Kette",
     "Korrektur",
     "Korrigiert",
+    "Sidecar",
     "SidecarFehler",
     "analyse_laden",
+    "analyse_lesen",
     "analyse_pfad",
     "analyse_regeln",
     "analyse_speichern",
@@ -1002,6 +1059,7 @@ __all__ = [
     "korr_zeiten",
     "naehte",
     "rohfolge",
+    "sidecar_veraltet",
     "von_zeilen",
     "vorauswahl",
     "vorschlaege",

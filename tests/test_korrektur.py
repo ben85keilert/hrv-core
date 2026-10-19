@@ -518,3 +518,45 @@ def test_gespeicherte_interpolation_ohne_anker_wird_geloescht() -> None:
     rec = messung([3000, 2600])
     korr = anwenden(rec, [Korrektur("interpolate", i, 0.0, 3000.0) for i in (0, 1)])
     assert korr.rr_ms == [] and korr.entfernt == 2
+
+
+# ---------------------------------------------------------------------------
+# Sidecar und Prüfsumme (Befund R16)
+# ---------------------------------------------------------------------------
+
+
+def test_sidecar_meldet_veraltete_pruefsumme_statt_zu_werfen(tmp_path: Path) -> None:
+    """Ein Sidecar einer anderen oder veränderten Messdatei: Korrekturen kommen,
+    aber `veraltet` ist gesetzt — die App zeigt den Hinweis (wie praxis_gui)."""
+    from hrv_core.ereignisse import metadaten_schreiben
+    from hrv_core.korrektur import analyse_lesen, sidecar_veraltet
+
+    roh = tmp_path / GOLDEN.name
+    shutil.copy(GOLDEN, roh)
+    rec = laden(roh)
+    assert sidecar_veraltet(roh) is None  # kein Sidecar
+    leer = analyse_lesen(roh)
+    assert leer.korrekturen == [] and not leer.vorhanden and not leer.veraltet
+
+    analyse_speichern(roh, rec, alle_vorschlaege(rec))
+    frisch = analyse_lesen(roh)
+    assert frisch.vorhanden and not frisch.veraltet and len(frisch.korrekturen) == 9
+    assert frisch.sha1_gespeichert == _sha1(roh)
+    assert sidecar_veraltet(roh) is False
+
+    # Messdatei verändert (fremde Datei untergeschoben): Prüfsumme passt nicht mehr
+    roh.write_text(
+        roh.read_text(encoding="utf-8").replace('"rr_ms": 8', '"rr_ms": 9', 1), encoding="utf-8"
+    )
+    alt = analyse_lesen(roh)
+    assert alt.veraltet and len(alt.korrekturen) == 9  # nichts geworfen, nur markiert
+    assert sidecar_veraltet(roh) is True
+    assert analyse_laden(roh) == alt.korrekturen  # unveränderte Schnittstelle
+
+    # Metadaten schreiben frischt die Prüfsumme auf — danach wieder gültig
+    metadaten_schreiben(roh, titel="Ruhe")
+    assert sidecar_veraltet(roh) is False
+
+    # Sidecar ohne Prüfsumme (ältere praxis_gui-Fassung): kein Urteil
+    analyse_pfad(roh).write_text(json.dumps({"schema": "analysis-v1", "corrections": []}))
+    assert sidecar_veraltet(roh) is None and not analyse_lesen(roh).veraltet

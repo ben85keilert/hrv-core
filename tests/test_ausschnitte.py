@@ -256,3 +256,52 @@ def test_achsen_umrechnung_verity() -> None:
     """Kurvenachse (alle Intervalle) ↔ Herzuhr der Datei (nur Zeilen) — linear dazwischen."""
     nach_datei, nach_achse = achsen_umrechnung([0.0, 10.0, 30.0], [0.0, 10.0, 20.0])
     assert nach_datei(20.0) == 15.0 and nach_achse(15.0) == 20.0
+
+
+def test_zusatz_speichern_schreibt_segmente_fort(tmp_path) -> None:
+    """Befund F11: `active`/`visible`, `metrics` und Fremdes je Segment bleiben —
+    vorher machte ein Crop aus der trainingsapp jeden Abschnitt wieder aktiv."""
+    pfad = tmp_path / GOLDEN.name
+    shutil.copy(GOLDEN, pfad)
+    analyse_pfad(pfad).write_text(
+        json.dumps(
+            {
+                "schema": "analysis-v1",
+                "segments": [
+                    {"id": GESAMT_ID, "name": "Gesamt", "t_start_s": 0, "t_end_s": 9},
+                    {
+                        "id": "seg-1",
+                        "name": "Pause",
+                        "t_start_s": 100.0,
+                        "t_end_s": 150.0,
+                        "color": "#000000",
+                        "metrics": {"rmssd": 44.0},
+                        "computed_utc": "2026-10-19T00:00:00Z",
+                        "active": False,
+                        "visible": False,
+                        "praxis_feld": 1,
+                    },
+                ],
+            }
+        )
+    )
+    # unverändert gespeichert (z. B. Crop gesetzt): alles bleibt, Farbe/Name von uns
+    zusatz_speichern(
+        pfad, None, [Abschnitt("Pause", 100.0, 150.0, id="seg-1", farbe="#111111")], float
+    )
+    seg = json.loads(analyse_pfad(pfad).read_text())["segments"][1]
+    assert seg["active"] is False and seg["visible"] is False and seg["praxis_feld"] == 1
+    assert seg["metrics"] == {"rmssd": 44.0} and seg["computed_utc"] == "2026-10-19T00:00:00Z"
+    assert seg["color"] == "#111111"
+
+    # Grenzen verschoben: Kennzahlen gälten für einen anderen Bereich — geleert, Rest bleibt
+    zusatz_speichern(pfad, None, [Abschnitt("Pause", 100.0, 160.0, id="seg-1")], float)
+    seg = json.loads(analyse_pfad(pfad).read_text())["segments"][1]
+    assert seg["metrics"] is None and seg["computed_utc"] is None
+    assert seg["active"] is False and seg["praxis_feld"] == 1 and seg["t_end_s"] == 160.0
+
+    # neues Segment: heutige Vorgaben
+    zusatz_speichern(pfad, None, [Abschnitt("Neu", 10.0, 20.0, id="seg-2")], float)
+    segs = json.loads(analyse_pfad(pfad).read_text())["segments"]
+    assert [s["id"] for s in segs] == [GESAMT_ID, "seg-2"]
+    assert segs[1]["active"] is True and segs[1]["visible"] is True and segs[1]["metrics"] is None

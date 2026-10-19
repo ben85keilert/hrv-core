@@ -263,6 +263,8 @@ def zusatz_lesen(
 
     praxis_gui speichert Abschnitte bei aktivem Crop relativ zu dessen Anfang;
     den ganzen Abschnitt („gesamt") legt es selbst an — er zählt hier nicht.
+    Ob das Sidecar noch zur Messdatei passt, sagt `korrektur.sidecar_veraltet`
+    (Befund R16) — die Zeiten hier stehen auf der Herzuhr der Rohdatei.
     """
     doc = _json_lesen(analyse_pfad(Path(rec_pfad))) or {}
     crop = doc.get("active_crop")
@@ -310,6 +312,16 @@ def zusatz_speichern(
     knappes mit Schema, Quelle und Prüfsumme. Zeiten auf der Herzuhr der
     Rohdatei, Abschnitte bei Crop relativ zu dessen Anfang (wie praxis_gui).
     Abschnitte, die praxis_gui selbst führt („gesamt"), bleiben stehen.
+
+    Je Abschnitt wird das **gelesene Segment fortgeschrieben** (gleiche ``id``):
+    nur ``name``, ``t_start_s``, ``t_end_s`` und ``color`` werden gesetzt;
+    ``active``/``visible`` (praxis_gui blendet damit aus), ``metrics``,
+    ``computed_utc`` und unbekannte Felder bleiben (Befund F11 — vorher machte
+    ein Crop aus der trainingsapp jeden Abschnitt wieder aktiv und sichtbar und
+    warf praxis_guis Kennzahlen weg). Verschieben sich die Grenzen, werden
+    ``metrics``/``computed_utc`` geleert: Die Zahlen gälten sonst für einen
+    Bereich, den es nicht mehr gibt. Neue Segmente bekommen die heutigen
+    Vorgaben (aktiv, sichtbar, keine Kennzahlen).
     """
     rec_pfad = Path(rec_pfad)
     ziel = analyse_pfad(rec_pfad)
@@ -325,23 +337,33 @@ def zusatz_speichern(
         versatz = lo
     else:
         doc.pop("active_crop", None)
-    behalten = [
-        d for d in doc.get("segments") or [] if isinstance(d, dict) and d.get("id") == GESAMT_ID
-    ]
-    doc["segments"] = behalten + [
-        {
-            "id": a.id,
-            "name": a.name,
-            "t_start_s": round(nach_datei(a.von_s) - versatz, 3),
-            "t_end_s": round(nach_datei(a.bis_s) - versatz, 3),
-            "color": a.farbe,
-            "metrics": None,
-            "computed_utc": None,
-            "active": True,
-            "visible": True,
-        }
-        for a in abschnitte
-    ]
+    gelesen = [d for d in doc.get("segments") or [] if isinstance(d, dict)]
+    behalten = [d for d in gelesen if d.get("id") == GESAMT_ID]
+    nach_id = {str(d.get("id")): d for d in gelesen if d.get("id") != GESAMT_ID}
+    neu: list[dict[str, Any]] = []
+    for a in abschnitte:
+        von, bis = round(nach_datei(a.von_s) - versatz, 3), round(nach_datei(a.bis_s) - versatz, 3)
+        alt = nach_id.get(a.id)
+        if alt is None:
+            seg: dict[str, Any] = {
+                "id": a.id,
+                "name": a.name,
+                "t_start_s": von,
+                "t_end_s": bis,
+                "color": a.farbe,
+                "metrics": None,
+                "computed_utc": None,
+                "active": True,
+                "visible": True,
+            }
+        else:
+            seg = dict(alt)
+            if (seg.get("t_start_s"), seg.get("t_end_s")) != (von, bis):
+                seg["metrics"] = None
+                seg["computed_utc"] = None
+            seg.update({"name": a.name, "t_start_s": von, "t_end_s": bis, "color": a.farbe})
+        neu.append(seg)
+    doc["segments"] = behalten + neu
     doc["updated_utc"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return json_atomar_schreiben(ziel, doc)
 
