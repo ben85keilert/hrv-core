@@ -39,6 +39,9 @@ Thumbs.db
 *.db-shm
 
 
+# Rohmitschnitte und Befunde von scripts/ble_erkundung.py
+ausgaben/
+
 # Dateien mit eigenen Anmerkungen
 temp*
 tmp*

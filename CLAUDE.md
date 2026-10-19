@@ -47,6 +47,7 @@ uv run python scripts/deid_export.py <messdatei> --ziel $HRV_TESTDATA/p001   # n
 uv run python scripts/golden_erneuern.py           # nur nach begründeter Algorithmusänderung
 uv run python scripts/fixture_synth_lang.py       # synthetische 5000-s-Fixture neu erzeugen (Seed fest)
 uv run python scripts/vergleich_praxis_gui.py      # docs/VERGLEICH_ZAHLEN.md neu erzeugen
+uv run --with bleak python scripts/ble_erkundung.py ADRESSE   # Dienste und RR-Strom eines Gurts (Hardware, nur Ben)
 ```
 
 ## Regeln
@@ -100,3 +101,5 @@ Fensterspektrum, Spektrogramm), `nonlinear` (Poincaré, DFA α1, SampEn), `atmun
 `referenz` (alles auf einmal, Grundlage der Golden Master), `deid` (Weißliste je Format).
 Formeln und Fallstricke: `docs/hrv_algorithmen.md`, `docs/korrektur.md`; welche Felder die
 Bibliothek liest und schreibt: `docs/formate.md`.
+Gerätewissen für beide Apps (H10 als Referenz, Verity Sense, Decathlon, Beurer PO60, Prüfmethode):
+`docs/geraete/README.md` — aus praxis_gui hierher verschoben (19.10.2026), Codepfade dort meinen praxis_gui.

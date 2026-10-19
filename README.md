@@ -24,8 +24,11 @@ fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0
   (`test_golden_trainingsapp.py`, 1e-9) · `tests/golden/praxis_gui/` Vorher-Stand von praxis_gui
   (scipy/NK2) für `docs/VERGLEICH_ZAHLEN.md` · `tests/referenz/` Vergleich gegen scipy/neurokit2.
 - `docs/` — `hrv_algorithmen.md`, `korrektur.md` (Regeln), `VERGLEICH.md` (Entscheidungen),
-  `VERGLEICH_ZAHLEN.md`, `OFFENE_PUNKTE.md`.
-- `scripts/golden_erneuern.py` nur nach begründeter Algorithmusänderung; `scripts/vergleich_praxis_gui.py`.
+  `VERGLEICH_ZAHLEN.md`, `OFFENE_PUNKTE.md`, `formate.md`.
+- `docs/geraete/` — Gerätewissen für beide Apps: Polar H10 (Referenz), Verity Sense, Decathlon HRM
+  Belt, Beurer PO60, Prüfmethode für neue Geräte, Mehrgerätebetrieb.
+- `scripts/golden_erneuern.py` nur nach begründeter Algorithmusänderung; `scripts/vergleich_praxis_gui.py`;
+  `scripts/ble_erkundung.py` (Dienste und RR-Strom eines unbekannten Gurts, `uv run --with bleak`).
 
 Beide Apps rechnen mit denselben Funktionen. Unterschiede gibt es nur in der Bedienung: die
 trainingsapp korrigiert standardmäßig automatisch (`Korrekturregeln`-Vorgaben) mit zuschaltbarem
