@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -25,8 +25,6 @@ from .constants import (
 
 SCHEMA_RAW: str = "raw-v1"
 
-# Dateiname: sensor_<YYYY-MM-DD>_<HHMMSS>.json
-DATEINAME_MUSTER = re.compile(r"^sensor_\d{4}-\d{2}-\d{2}_\d{6}\.json$")
 _ZEITFORMAT_UTC = "%Y-%m-%dT%H:%M:%SZ"
 
 # Endungen, die zwar mit `sensor_` beginnen, aber keine Messdateien sind.
@@ -35,6 +33,16 @@ _KORRIGIERT_MUSTER = re.compile(r"__c\d+$")
 
 #: Unterordner unter ``Messungen/`` für synthetische Daten (Vertrag, Abschnitt 6).
 GENERATOR_ORDNER: str = "Generator"
+
+
+class FormatFehler(ValueError):
+    """Die Datei ist kein lesbares `raw-v1` (oder Backup) — **ein** Fehlertyp für Aufrufer.
+
+    Vorher warfen `laden`/`backup_lesen` je nach Stelle `KeyError`, `TypeError`,
+    `ValueError` oder `AttributeError` (Befund F14); ein Backup mit einem kaputten
+    Messwert brach so die Wiederherstellung ab. `ValueError` als Basis, damit
+    bisherige ``except ValueError`` weiter greifen.
+    """
 
 
 @dataclass(slots=True)
@@ -78,15 +86,27 @@ class Beat:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Beat:
-        # `corrected-v1` enthält kein t_wall_s — dann bleibt es None statt zu raten.
-        tw = d.get("t_wall_s")
-        return cls(
-            t_s=float(d["t_s"]),
-            rr_ms=int(d.get("rr_ms") or 0),
-            hf_bpm=int(d.get("hf_bpm") or 0),
-            t_wall_s=None if tw is None else float(tw),
-            tw_src=str(d.get("tw_src") or "m"),
-        )
+        """Eine Zeile aus ``messungen``; alles Unlesbare ist ein `FormatFehler`.
+
+        >>> Beat.from_dict({"t_s": "x", "rr_ms": 800})
+        Traceback (most recent call last):
+        ...
+        hrv_core.recording.FormatFehler: Messwert unlesbar: {'t_s': 'x', 'rr_ms': 800}
+        """
+        if not isinstance(d, dict):
+            raise FormatFehler(f"Messwert ist kein Objekt: {d!r}")
+        try:
+            # `corrected-v1` enthält kein t_wall_s — dann bleibt es None statt zu raten.
+            tw = d.get("t_wall_s")
+            return cls(
+                t_s=float(d["t_s"]),
+                rr_ms=int(d.get("rr_ms") or 0),
+                hf_bpm=int(d.get("hf_bpm") or 0),
+                t_wall_s=None if tw is None else float(tw),
+                tw_src=str(d.get("tw_src") or "m"),
+            )
+        except (KeyError, TypeError, ValueError, OverflowError) as fehler:
+            raise FormatFehler(f"Messwert unlesbar: {d!r}") from fehler
 
 
 @dataclass(slots=True, weakref_slot=True)
@@ -123,6 +143,12 @@ class Recording:
     # Rohe PPI-Pakete optischer Sensoren (Vertrag, Abschnitt 3b). None heißt:
     # Gerät ohne PPI — dann fehlt der Schlüssel in der Datei, wie bei praxis_gui.
     ppi_pakete: list[dict[str, Any]] | None = None
+    # Kopf, wie gelesen (Befund F16): `schema` None heißt Altdatei ohne Schema —
+    # ein Round-Trip behauptet dann kein `raw-v1`, das die Datei nie hatte (sie
+    # trägt etwa noch den `hrv`-Block). `analyzed` setzt praxis_gui nach der
+    # Nachberechnung; wir schreiben zurück, was wir gelesen haben.
+    schema: str | None = SCHEMA_RAW
+    analyzed: bool = False
 
     # -- abgeleitet ---------------------------------------------------------
 
@@ -173,25 +199,30 @@ class Recording:
         ['ecg_aufzeichnung', 'ppg_aufzeichnung', 'titel', 'notiz', 'ereignisse', 'messungen']
         >>> "ppi_pakete" in doc
         False
+        >>> "schema" in Recording(schema=None).to_dict()  # Altdatei ohne Schema bleibt ohne
+        False
         """
         start = self.start_utc or datetime.now(UTC)
         doc: dict[str, Any] = {
             "behandlung_id": self.behandlung_id,
             "patient_id": self.patient_id,
-            "datum": self.datum or start.strftime("%Y-%m-%d"),
+            # Ortsdatum wie `Aufnahme` und praxis_gui (Vertrag §7), nicht das UTC-Datum
+            "datum": self.datum or start.astimezone().strftime("%Y-%m-%d"),
             "geraet": self.geraet,
             "geraet_profil": self.geraet_profil,
             "intervall_quelle": self.intervall_quelle,
             "datenqualitaet": self.effektive_qualitaet(),
             "simulation": bool(self.simulation),
             "generator_config": self.generator_config,
-            "schema": SCHEMA_RAW,
-            "analyzed": False,
+            "schema": self.schema,
+            "analyzed": bool(self.analyzed),
             "start_utc": start.strftime(_ZEITFORMAT_UTC),
             "batterie_prozent": self.batterie_prozent,
             "ecg_aufzeichnung": bool(self.ecg_aufzeichnung),
             "ppg_aufzeichnung": bool(self.ppg_aufzeichnung),
         }
+        if self.schema is None:
+            del doc["schema"]
         if self.ppi_pakete is not None:
             doc["ppi_pakete"] = self.ppi_pakete
         doc["titel"] = self.titel
@@ -210,6 +241,11 @@ class Recording:
 
         Defensiv, weil Altdateien weder `schema` noch `intervall_quelle` noch
         `geraet_profil` enthalten (siehe docs/kompatibilitaet.md, Abschnitt 7).
+
+        Raises:
+            FormatFehler: ``messungen`` oder ``ereignisse`` sind keine Liste, oder
+                ein Messwert ist unlesbar. Eine Liste aus den Zeichen eines Strings
+                (Befund F15) wäre Korruption beim nächsten Speichern, kein Lesen.
         """
         bekannt = {
             "behandlung_id",
@@ -234,7 +270,13 @@ class Recording:
             "messungen",
         }
         quelle = str(doc.get("intervall_quelle") or QUELLE_EKG_RR)
-        beats = [Beat.from_dict(m) for m in (doc.get("messungen") or [])]
+        messungen = doc.get("messungen") or []
+        ereignisse = doc.get("ereignisse") or []
+        if not isinstance(messungen, list):
+            raise FormatFehler("messungen ist keine Liste")
+        if not isinstance(ereignisse, list):
+            raise FormatFehler("ereignisse ist keine Liste")
+        beats = [Beat.from_dict(m) for m in messungen]
 
         start_raw = doc.get("start_utc")
         start: datetime | None = None
@@ -259,11 +301,13 @@ class Recording:
             generator_config=doc.get("generator_config"),
             titel=str(doc.get("titel") or ""),
             notiz=str(doc.get("notiz") or ""),
-            ereignisse=list(doc.get("ereignisse") or []),
+            ereignisse=list(ereignisse),
             extra={k: v for k, v in doc.items() if k not in bekannt},
             datum=(str(d) if (d := doc.get("datum")) else None),
             ppg_aufzeichnung=bool(doc.get("ppg_aufzeichnung")),
             ppi_pakete=(list(pp) if isinstance(pp := doc.get("ppi_pakete"), list) else None),
+            schema=(str(s) if (s := doc.get("schema")) else None),
+            analyzed=bool(doc.get("analyzed")),
         )
 
 
@@ -303,9 +347,26 @@ def ist_messdatei(pfad: Path | str) -> bool:
 
 
 def laden(pfad: Path | str) -> Recording:
-    """Liest eine Messdatei."""
+    """Liest eine Messdatei.
+
+    Raises:
+        FormatFehler: kein JSON, kein Objekt oder unlesbare Messwerte — ein
+            Fehlertyp statt vier (Befund F14). ``OSError`` bleibt ``OSError``.
+    """
+    return Recording.from_dict(json_objekt_lesen(pfad))
+
+
+def json_objekt_lesen(pfad: Path | str) -> dict[str, Any]:
+    """Eine JSON-Datei als Objekt — sonst `FormatFehler`."""
+    pfad = Path(pfad)
     with open(pfad, encoding="utf-8") as f:
-        return Recording.from_dict(json.load(f))
+        try:
+            doc = json.load(f)
+        except ValueError as fehler:  # JSONDecodeError, auch UnicodeDecodeError-Folgen
+            raise FormatFehler(f"{pfad.name} ist kein JSON: {fehler}") from fehler
+    if not isinstance(doc, dict):
+        raise FormatFehler(f"{pfad.name} ist kein JSON-Objekt")
+    return doc
 
 
 def json_atomar_schreiben(pfad: Path | str, doc: Any, *, kompakt: bool = False) -> Path:
@@ -313,8 +374,14 @@ def json_atomar_schreiben(pfad: Path | str, doc: Any, *, kompakt: bool = False) 
 
     Erst ``<pfad>.tmp`` vollständig schreiben und auf den Datenträger zwingen,
     dann mit `os.replace` an die Zielstelle tauschen — das ist auf allen
-    Plattformen ein atomarer Schritt. Bricht das Schreiben ab, bleibt die alte
-    Datei unverändert und der Zwischenstand wird entfernt.
+    Plattformen ein atomarer Schritt — und zuletzt den Ordner synchronisieren,
+    damit der Rename bei Stromausfall nicht verloren geht (ext4 auf Android,
+    Befund F19). Bricht das Schreiben ab, bleibt die alte Datei unverändert und
+    der Zwischenstand wird entfernt.
+
+    ``NaN``/``Infinity`` sind kein gültiges JSON (strikte Parser lehnen sie ab,
+    Befund F18): ``allow_nan=False`` lässt das Schreiben dann mit ``ValueError``
+    scheitern — die alte Datei bleibt.
 
     Args:
         kompakt: ohne Einrückung (für das 15-s-Backup, das bei langen Messungen
@@ -325,16 +392,33 @@ def json_atomar_schreiben(pfad: Path | str, doc: Any, *, kompakt: bool = False) 
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             if kompakt:
-                json.dump(doc, f, ensure_ascii=False, separators=(",", ":"))
+                json.dump(doc, f, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
             else:
-                json.dump(doc, f, ensure_ascii=False, indent=2)
+                json.dump(doc, f, ensure_ascii=False, indent=2, allow_nan=False)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, ziel)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+    _ordner_fsync(ziel.parent)
     return ziel
+
+
+def _ordner_fsync(ordner: Path) -> None:
+    """Verzeichniseintrag auf den Datenträger zwingen — nur wo das Betriebssystem es kann."""
+    if not hasattr(os, "O_DIRECTORY"):  # Windows
+        return
+    try:
+        fd = os.open(ordner, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
 
 
 def messordner(basis: Path | str, geraeteordner: str, *, simulation: bool = False) -> Path:
@@ -361,24 +445,59 @@ def messdatei_name(start_utc: datetime | None) -> str:
     return f"sensor_{ts}.json"
 
 
+def freier_pfad(ordner: Path | str, dateiname: str) -> Path:
+    """Ein Pfad, an dem noch keine Datei liegt: ``name.json``, ``name_1.json``, ``name_2.json`` …
+
+    Wie praxis_gui (`_save_recording`): Zwei Aufnahmen mit derselben
+    UTC-Startsekunde im selben Ordner (Simulator, zweiter Start nach einem
+    Fehler) überschrieben sonst still die erste (Befund F10). `ist_messdatei`
+    erkennt den Zählernamen.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     erster = freier_pfad(d, "sensor_2026-10-19_080000.json")
+    ...     erster.write_text("{}")
+    ...     freier_pfad(d, "sensor_2026-10-19_080000.json").name
+    2
+    'sensor_2026-10-19_080000_1.json'
+    """
+    ordner = Path(ordner)
+    pfad = ordner / dateiname
+    stamm, endung = os.path.splitext(dateiname)
+    zaehler = 1
+    while pfad.exists():
+        pfad = ordner / f"{stamm}_{zaehler}{endung}"
+        zaehler += 1
+    return pfad
+
+
 def speichern(rec: Recording, ordner: Path | str, dateiname: str | None = None) -> Path:
-    """Schreibt eine Messung atomar als `raw-v1` und liefert den Pfad zurück.
+    """Schreibt eine Messung atomar als `raw-v1` und liefert den **tatsächlichen** Pfad.
 
     Den Ordner bestimmt der Aufrufer — für Simulationen `messordner(...,
     simulation=True)`, sonst könnte Synthetik in einer Patientenakte landen.
+    Eine vorhandene Datei wird nie ersetzt: dann hängt ein Zähler an
+    (`freier_pfad`), und der Rückgabewert weicht vom vorab bekannten Namen ab.
+    Ohne ``start_utc`` wird die Startzeit einmal gezogen, damit Dateiname und
+    Kopf dieselbe Sekunde tragen (Befund F17).
     """
+    if rec.start_utc is None:
+        rec = replace(rec, start_utc=datetime.now(UTC))
     ordner = Path(ordner)
     ordner.mkdir(parents=True, exist_ok=True)
-    return json_atomar_schreiben(ordner / (dateiname or rec.dateiname()), rec.to_dict())
+    return json_atomar_schreiben(freier_pfad(ordner, dateiname or rec.dateiname()), rec.to_dict())
 
 
 __all__ = [
     "GENERATOR_ORDNER",
     "SCHEMA_RAW",
     "Beat",
+    "FormatFehler",
     "Recording",
+    "freier_pfad",
     "ist_messdatei",
     "json_atomar_schreiben",
+    "json_objekt_lesen",
     "laden",
     "messdatei_name",
     "messordner",

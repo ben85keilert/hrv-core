@@ -17,6 +17,7 @@ import pytest
 from hrv_core import recording as recording_mod
 from hrv_core.aufnahme import Aufnahme
 from hrv_core.recording import (
+    Beat,
     Recording,
     ist_messdatei,
     laden,
@@ -422,3 +423,85 @@ def test_backups_finden_nur_in_geraeteordnern(tmp_path: Path) -> None:
     (messungen / ".backup_2026-10-12_100000.json").write_text("{}")  # falsche Ebene
     assert backups_finden(messungen) == sorted([b1, b2])
     assert all(not ist_messdatei(p) for p in backups_finden(messungen))
+
+
+# ---------------------------------------------------------------------------
+# Durchsicht 2026-10-19: F10, F14, F17, F18
+# ---------------------------------------------------------------------------
+
+
+def test_vorhandene_messdatei_wird_nie_ueberschrieben(tmp_path: Path) -> None:
+    """Befund F10: zwei Aufnahmen mit derselben Startsekunde — die erste blieb nicht."""
+    ordner = messordner(tmp_path, "PolarH10")
+    erste = _gefuellt(h10()).speichern(ordner)
+    zweite = _gefuellt(h10(), n=30).speichern(ordner)
+    assert erste.name == "sensor_2026-10-12_080000.json"
+    assert zweite.name == "sensor_2026-10-12_080000_1.json"
+    assert ist_messdatei(zweite)
+    assert len(laden(erste).beats) == 20 and len(laden(zweite).beats) == 30
+    dritte = speichern(laden(erste), ordner)  # auch der Modulweg zählt hoch
+    assert dritte.name == "sensor_2026-10-12_080000_2.json"
+    # der vorab bekannte Name ist dann nicht mehr der tatsächliche — maßgeblich ist der Pfad
+    vierte = _gefuellt(h10())
+    assert vierte.speichern(ordner).name != vierte.dateiname()
+
+
+def test_laden_und_backup_lesen_werfen_einen_formatfehler(tmp_path: Path) -> None:
+    """Befund F14: KeyError/AttributeError/ValueError je nach Stelle — jetzt `FormatFehler`."""
+    from hrv_core.aufnahme import backup_lesen
+    from hrv_core.recording import FormatFehler
+
+    kaputt = tmp_path / "sensor_2026-10-12_080000.json"
+    faelle = [
+        "kein json",
+        "[1, 2]",
+        json.dumps({"schema": "raw-v1", "messungen": [{"rr_ms": 800}]}),  # t_s fehlt
+        json.dumps({"schema": "raw-v1", "messungen": [None]}),
+        json.dumps({"schema": "raw-v1", "messungen": [{"t_s": "x", "rr_ms": 800}]}),
+        json.dumps({"schema": "raw-v1", "messungen": {"t_s": 1}}),
+        json.dumps({"schema": "raw-v1", "messungen": [], "ereignisse": "Start"}),  # F15
+    ]
+    for inhalt in faelle:
+        kaputt.write_text(inhalt, encoding="utf-8")
+        with pytest.raises(FormatFehler):
+            laden(kaputt)
+        with pytest.raises(FormatFehler):  # ValueError wie bisher, aber einheitlich
+            backup_lesen(kaputt)
+    assert issubclass(FormatFehler, ValueError)
+
+
+def test_ohne_startzeit_tragen_dateiname_und_kopf_dieselbe_sekunde(tmp_path: Path) -> None:
+    """Befund F17: zwei `datetime.now()` an der Sekundengrenze — jetzt einmal gezogen."""
+    rec = Recording(beats=[Beat(0.8, 800, 75, 0.8)])
+    pfad = speichern(rec, tmp_path)
+    doc = json.loads(pfad.read_text(encoding="utf-8"))
+    im_namen = pfad.stem.removeprefix("sensor_")
+    assert (
+        datetime.strptime(doc["start_utc"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d_%H%M%S")
+        == im_namen
+    )
+    start = datetime.strptime(doc["start_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    assert doc["datum"] == start.astimezone().strftime("%Y-%m-%d")  # Ortsdatum, Vertrag §7
+
+
+def test_nan_wird_nie_als_json_geschrieben(tmp_path: Path) -> None:
+    """Befund F18: `NaN` ist kein JSON — Schreiben scheitert, die alte Datei bleibt."""
+    from hrv_core.ereignisse import marke_bereinigen
+    from hrv_core.recording import json_atomar_schreiben
+
+    ziel = tmp_path / "x.json"
+    json_atomar_schreiben(ziel, {"a": 1})
+    with pytest.raises(ValueError):
+        json_atomar_schreiben(ziel, {"a": float("nan")})
+    assert json.loads(ziel.read_text()) == {"a": 1}
+    assert not (tmp_path / "x.json.tmp").exists()
+    assert marke_bereinigen({"quelle": "gps", "soll_s": float("inf"), "runde": 2}) == {
+        "quelle": "gps",
+        "runde": 2,
+    }
+
+
+def test_altes_dateinamenmuster_ist_weg() -> None:
+    """Befund F20: `DATEINAME_MUSTER` war ungenutzt und hätte `_1`-Namen abgelehnt."""
+    assert not hasattr(recording_mod, "DATEINAME_MUSTER")
+    assert ist_messdatei("sensor_2026-10-12_080000_1.json")

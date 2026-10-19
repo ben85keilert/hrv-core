@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -91,13 +92,17 @@ def marke_bereinigen(marke: Any) -> dict[str, Any]:
     {'quelle': 'timer', 'soll_s': 60, 'profil': '7KQ4M2XA'}
     >>> marke_bereinigen(None)
     {}
+    >>> marke_bereinigen({"quelle": "gps", "soll_s": float("nan")})  # kein gültiges JSON
+    {'quelle': 'gps'}
     """
     if not isinstance(marke, dict):
         return {}
     return {
         k: v
         for k in MARKE_FELDER
-        if (v := marke.get(k)) is not None and isinstance(v, str | int | float | bool)
+        if (v := marke.get(k)) is not None
+        and isinstance(v, str | int | float | bool)
+        and (not isinstance(v, float) or math.isfinite(v))
     }
 
 
@@ -384,14 +389,34 @@ def _sha1(pfad: Path) -> str:
     return h.hexdigest()
 
 
+def _vor_messungen(doc: dict[str, Any], neu: dict[str, Any]) -> dict[str, Any]:
+    """``neu`` in der Folge von `METADATEN` vor ``messungen`` einfügen, sonst ans Ende.
+
+    >>> list(_vor_messungen({"a": 1, "messungen": []}, {"titel": "x", "notiz": ""}))
+    ['a', 'titel', 'notiz', 'messungen']
+    """
+    out: dict[str, Any] = {}
+    eingefuegt = False
+    for k, v in doc.items():
+        if k == "messungen" and not eingefuegt:
+            out.update({m: neu[m] for m in METADATEN if m in neu})
+            eingefuegt = True
+        out[k] = v
+    if not eingefuegt:
+        out.update({m: neu[m] for m in METADATEN if m in neu})
+    return out
+
+
 def metadaten_schreiben(pfad: Path | str, **felder: Any) -> str:
     """``titel``/``notiz``/``ereignisse`` in die Messdatei schreiben — und nichts sonst.
 
     Die Datei wird als JSON gelesen und mit unveränderter Schlüsselfolge
     zurückgeschrieben (wie praxis_gui: ``indent=2``, ``ensure_ascii=False``),
     atomar. ``messungen``, ``ppi_pakete`` und alle übrigen Felder bleiben
-    Wert für Wert erhalten. Danach bekommt ein vorhandenes Sidecar die neue
-    Prüfsumme, sonst hielte praxis_gui es für veraltet.
+    Wert für Wert erhalten; ein Feld, das die Datei noch nicht hatte (Altdatei
+    ohne ``titel``), kommt vor ``messungen`` zu stehen, nicht dahinter (F21).
+    Danach bekommt ein vorhandenes Sidecar die neue Prüfsumme, sonst hielte
+    praxis_gui es für veraltet.
 
     Returns:
         SHA1 der neu geschriebenen Datei.
@@ -408,8 +433,13 @@ def metadaten_schreiben(pfad: Path | str, **felder: Any) -> str:
         doc = json.load(f)
     if not isinstance(doc, dict):
         raise ValueError(f"{pfad.name} ist keine Messdatei")
+    neu = {k: v for k, v in felder.items() if k not in doc}
     for k, v in felder.items():
-        doc[k] = v
+        if k in doc:
+            doc[k] = v
+    if neu:
+        # Fehlende Metadaten vor `messungen` einreihen (Lesbarkeit, wie der Schreiber)
+        doc = _vor_messungen(doc, neu)
     json_atomar_schreiben(pfad, doc)
     neu = _sha1(pfad)
     sidecar = pfad.with_name(pfad.stem + "_analyzed.json")

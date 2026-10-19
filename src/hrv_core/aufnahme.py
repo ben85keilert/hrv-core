@@ -27,14 +27,21 @@ Wiederherstellung selbst (Messdatei schreiben, Eintrag anlegen) macht
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from .constants import AUFNAHME_RR_MAX_MS, AUFNAHME_RR_MIN_MS
-from .recording import Beat, Recording, json_atomar_schreiben, messdatei_name
+from .recording import (
+    Beat,
+    FormatFehler,
+    Recording,
+    freier_pfad,
+    json_atomar_schreiben,
+    json_objekt_lesen,
+    messdatei_name,
+)
 
 _TW_SRC = ("m", "r", "g")
 
@@ -214,7 +221,12 @@ class Aufnahme:
 
     def dateiname(self) -> str:
         """Name der Messdatei, die `speichern` schreiben wird — schon während der Aufnahme
-        (für Verweise, etwa eine Einheit der App, die über den Dateinamen verknüpft)."""
+        (für Verweise, etwa eine Einheit der App, die über den Dateinamen verknüpft).
+
+        Liegt beim Speichern schon eine Datei dieses Namens, bekommt die neue einen
+        Zähler (``_1``, `recording.freier_pfad`) — maßgeblich ist der Pfad, den
+        `speichern` zurückgibt.
+        """
         return messdatei_name(self.start_utc)
 
     def backup(self, ordner: Path, *, zusatz: Mapping[str, Any] | None = None) -> Path:
@@ -237,6 +249,10 @@ class Aufnahme:
     def speichern(self, ordner: Path) -> Path:
         """Schreibt die Messdatei atomar und löscht danach das Backup.
 
+        Eine vorhandene Datei gleichen Namens wird nie ersetzt — dann hängt ein
+        Zähler an (`recording.freier_pfad`, wie praxis_gui); der Rückgabewert ist
+        der tatsächliche Pfad.
+
         Raises:
             ValueError: Es wurde kein einziger Schlag aufgezeichnet — wie
                 praxis_gui („Keine Daten zum Speichern") entsteht dann keine Datei.
@@ -246,7 +262,7 @@ class Aufnahme:
         ordner = Path(ordner)
         ordner.mkdir(parents=True, exist_ok=True)
         rec = self.recording()
-        pfad = json_atomar_schreiben(ordner / rec.dateiname(), rec.to_dict())
+        pfad = json_atomar_schreiben(freier_pfad(ordner, rec.dateiname()), rec.to_dict())
         # Erst nach erfolgreichem Schreiben aufräumen — sonst ginge bei einem
         # Fehler die einzige Kopie verloren.
         for alt in {*self._backup_pfade, ordner / self.backup_name()}:
@@ -285,15 +301,13 @@ def backup_lesen(pfad: Path | str) -> tuple[Recording, dict[str, Any]]:
     Messdatei. Backups von vor diesem Block liefern ``{}``.
 
     Raises:
-        ValueError: kein JSON-Objekt (halb geschrieben, von Hand bearbeitet).
+        FormatFehler: kein JSON-Objekt (halb geschrieben, von Hand bearbeitet)
+            oder ein unlesbarer Messwert — ein `ValueError`, wie bisher.
     """
-    with open(pfad, encoding="utf-8") as f:
-        try:
-            doc = json.load(f)
-        except json.JSONDecodeError as fehler:
-            raise ValueError(f"Backup unlesbar: {fehler}") from fehler
-    if not isinstance(doc, dict):
-        raise ValueError("Backup ist kein JSON-Objekt")
+    try:
+        doc = json_objekt_lesen(pfad)
+    except FormatFehler as fehler:
+        raise FormatFehler(f"Backup unlesbar: {fehler}") from fehler
     zusatz = doc.pop(WIEDERHERSTELLUNG, None)
     return Recording.from_dict(doc), dict(zusatz) if isinstance(zusatz, dict) else {}
 

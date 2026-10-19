@@ -215,3 +215,35 @@ def test_unbekannte_felder_ueberleben_round_trip(tmp_path: Path) -> None:
     rec = Recording.from_dict(doc)
     zurueck = json.loads(speichern(rec, tmp_path).read_text(encoding="utf-8"))
     assert zurueck["zukuenftiges_feld"] == {"a": 1}
+
+
+def test_round_trip_altdatei_behaelt_den_kopf(tmp_path: Path) -> None:
+    """Befund F16: eine Altdatei ohne `schema` (mit `hrv`-Block) behauptete nach dem
+    Round-Trip `raw-v1` und `analyzed: false` — jetzt bleibt der Kopf, wie gelesen."""
+    alt = Path(__file__).parent / "fixtures" / "praxis_gui" / "sensor_2026-04-24_204808.json"
+    original = json.loads(alt.read_text(encoding="utf-8"))
+    assert "schema" not in original and "hrv" in original
+    rec = laden(alt)
+    assert rec.schema is None
+    zurueck = json.loads(speichern(rec, tmp_path).read_text(encoding="utf-8"))
+    assert "schema" not in zurueck
+    for k, v in original.items():
+        assert zurueck[k] == v, k
+
+    # Neue Dateien und solche mit Kopf: `schema` und `analyzed` wie gelesen
+    doc = {"schema": SCHEMA_RAW, "analyzed": True, "messungen": [{"t_s": 1.0, "rr_ms": 1000}]}
+    neu = Recording.from_dict(doc).to_dict()
+    assert neu["schema"] == SCHEMA_RAW and neu["analyzed"] is True
+    assert Recording().to_dict()["schema"] == SCHEMA_RAW
+
+
+def test_metadaten_schreiben_reiht_fehlenden_titel_vor_messungen_ein(tmp_path: Path) -> None:
+    """Befund F21: fehlte `titel`, landete es hinter `messungen`."""
+    from hrv_core.ereignisse import metadaten_schreiben
+
+    pfad = tmp_path / "sensor_2026-05-23_125422.json"
+    pfad.write_text(json.dumps({"geraet": "H10", "notiz": "", "messungen": []}), encoding="utf-8")
+    metadaten_schreiben(pfad, titel="Ruhe", notiz="x", ereignisse=[])
+    doc = json.loads(pfad.read_text(encoding="utf-8"))
+    assert list(doc) == ["geraet", "notiz", "titel", "ereignisse", "messungen"]
+    assert doc["titel"] == "Ruhe" and doc["notiz"] == "x"
