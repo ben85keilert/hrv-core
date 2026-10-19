@@ -41,7 +41,11 @@ def _reihe(name: str) -> tuple[np.ndarray, np.ndarray]:
     return t - rr / 2000.0, rr  # Intervallmitten wie `frequency`
 
 
-DATEIEN = ["sensor_2026-05-23_125422.json", "sensor_synth_ruhe_sitzend_11.json", "sensor_synth_kohaerente_atmung_7.json"]
+DATEIEN = [
+    "sensor_2026-05-23_125422.json",
+    "sensor_synth_ruhe_sitzend_11.json",
+    "sensor_synth_kohaerente_atmung_7.json",
+]
 
 
 @pytest.mark.parametrize("name", DATEIEN)
@@ -106,7 +110,7 @@ def test_spektrogramm_wie_scipy(name: str) -> None:
     rr = _rr(name)
     sg = spektrogramm(rr)
     t_rs, y = resample_tachogramm((np.cumsum(rr) - rr) / 1000.0, rr, 4.0)
-    n = int(120 * 4)
+    n = 120 * 4
     for j, s in enumerate(range(0, t_rs.size - n + 1, 120)):
         stueck = y[s : s + n]
         stueck = stueck - stueck.mean()

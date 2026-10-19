@@ -29,7 +29,8 @@ from typing import Any
 
 import numpy as np
 
-from .atmung import RUHE, median as atmung_median
+from .atmung import RUHE
+from .atmung import median as atmung_median
 from .constants import MIN_BEATS_SEGMENT, SAMPEN_MAX_BEATS_LIVE
 from .frequency import FREQ_BANDS, PSDMethode, frequenzbereich
 from .nonlinear import compute_dfa_alpha1, compute_sampen
@@ -153,8 +154,20 @@ def _ln(x: Any) -> float | None:
 
 #: Welche Schlüssel aus `frequenzbereich` ins Profil übernommen werden
 _FREQUENZ_FELDER = (
-    "vlf", "lf", "hf", "total_power", "lf_hf", "lf_n", "hf_n", "gipfel_hz",
-    "band_status", "band_reason", "band_reif", "dauer_s", "coverage_pct", "df_hz",
+    "vlf",
+    "lf",
+    "hf",
+    "total_power",
+    "lf_hf",
+    "lf_n",
+    "hf_n",
+    "gipfel_hz",
+    "band_status",
+    "band_reason",
+    "band_reif",
+    "dauer_s",
+    "coverage_pct",
+    "df_hz",
     "n_segments",
 )
 

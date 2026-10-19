@@ -72,7 +72,10 @@ def test_pruefen_lehnt_personenfelder_und_falsche_ordner_ab(tmp_path):
     (tmp_path / "Mueller").mkdir()
     _schreibe(tmp_path / "p001" / "sensor_a.json", dict(ROH, patient_id=None, behandlung_id=None))
     _schreibe(tmp_path / "p001" / "sensor_b.json", dict(ROH, behandlung_id=None))
-    _schreibe(tmp_path / "Mueller" / "sensor_c.json", dict(ROH, patient_id=None, behandlung_id=None, titel="", ereignisse=[]))
+    _schreibe(
+        tmp_path / "Mueller" / "sensor_c.json",
+        dict(ROH, patient_id=None, behandlung_id=None, titel="", ereignisse=[]),
+    )
     (tmp_path / "p001" / "kaputt.json").write_text("{", encoding="utf-8")
 
     bericht = deid.pruefen(tmp_path)
@@ -89,7 +92,9 @@ def test_pruefen_lehnt_personenfelder_und_falsche_ordner_ab(tmp_path):
 
 def test_pruefen_ohne_ordnerregel_fuer_fixtures(tmp_path):
     (tmp_path / "praxis_gui").mkdir()
-    _schreibe(tmp_path / "praxis_gui" / "sensor_a.json", dict(ROH, patient_id=None, behandlung_id=None))
+    _schreibe(
+        tmp_path / "praxis_gui" / "sensor_a.json", dict(ROH, patient_id=None, behandlung_id=None)
+    )
     assert not deid.pruefen(tmp_path).ok
     assert deid.pruefen(tmp_path, ordnerregel=False).ok
 

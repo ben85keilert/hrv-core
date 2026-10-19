@@ -18,7 +18,6 @@ trifft Ruhe- und Apnoeszenarien auf 0,1–0,4/min und lehnt Flimmern ab
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import numpy as np
@@ -191,4 +190,3 @@ def test_golden_kohaerenzatmung_nur_als_atemuebung() -> None:
     assert all(r is None for r in fenster_raten(t, rr, RUHE))
     raten = fenster_raten(t, rr, ATEMUEBUNG)
     assert all(r is not None and abs(r - 6.0) < 0.4 for r in raten)
-

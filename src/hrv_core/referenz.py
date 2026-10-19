@@ -114,8 +114,12 @@ def variante(rec: Recording, regeln: Korrekturregeln, achse: list[float]) -> dic
         "aufgenommen": basis.aufgenommen,
         "ketten": [
             {
-                "start": k.start, "ende": k.ende, "art": k.art, "unsicher": k.unsicher,
-                "grund": k.grund, "luecke_s": k.luecke_s,
+                "start": k.start,
+                "ende": k.ende,
+                "art": k.art,
+                "unsicher": k.unsicher,
+                "grund": k.grund,
+                "luecke_s": k.luecke_s,
                 "vorschlag": [v.to_dict() for v in k.vorschlag],
             }
             for k in ketten
@@ -163,7 +167,9 @@ def referenz(pfad: Path | str) -> dict[str, Any]:
         "atem_version": ATEM_VERSION,
         "n_beats": len(rec.beats),
         "intervall_quelle": rec.intervall_quelle,
-        "datenqualitaet": rec.effektive_qualitaet() if callable(rec.effektive_qualitaet) else rec.effektive_qualitaet,
+        "datenqualitaet": rec.effektive_qualitaet()
+        if callable(rec.effektive_qualitaet)
+        else rec.effektive_qualitaet,
         "dauer_s": rec.dauer_s() if callable(rec.dauer_s) else rec.dauer_s,
         "hat_ppi": rec.ppi_pakete is not None,
         "schlagzeiten": achse,

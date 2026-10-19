@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Vorher/Nachher für praxis_gui: alte scipy/NK2-Rechnung gegen hrv-core (trainingsapp-Standard).
 
 Liest tests/golden/praxis_gui/ (Vorher, ``praxis_gui/scripts/export_referenz.py``) und
@@ -40,7 +39,13 @@ def f(x, n=1):
 
 
 def delta(a, b):
-    if a is None or b is None or not isinstance(a, (int, float)) or not isinstance(b, (int, float)) or a == 0:
+    if (
+        a is None
+        or b is None
+        or not isinstance(a, (int, float))
+        or not isinstance(b, (int, float))
+        or a == 0
+    ):
         return "—"
     return f"{100 * (b - a) / a:+.1f} %".replace(".", ",")
 
@@ -62,10 +67,25 @@ ZEILEN = [
     ("SD1 ms", ("poincare", "sd1"), ("poincare", "sd1"), 3),
     ("SD2 ms", ("poincare", "sd2"), ("poincare", "sd2"), 3),
     ("DFA α1 (praxis: Kubios)", ("dfa_kubios", "dfa_alpha1"), ("dfa_alpha1", "dfa_alpha1"), 4),
-    ("DFA α1 (praxis: ohne Kubios)", ("dfa_ohne_kubios", "dfa_alpha1"), ("dfa_alpha1", "dfa_alpha1"), 4),
+    (
+        "DFA α1 (praxis: ohne Kubios)",
+        ("dfa_ohne_kubios", "dfa_alpha1"),
+        ("dfa_alpha1", "dfa_alpha1"),
+        4,
+    ),
     ("SampEn", ("sampen",), ("sampen",), 4),
-    ("Atemrate /min (praxis: Median 60-s-Fenster; hrv-core: ein Fenster gesamt)", ("resp_rate_rest", "resp_rate_bpm"), ("_atmung", "rate_pro_min"), 2),
-    ("RSA ms (praxis: Spline/Hilbert Median; hrv-core: atmung.rsa_ms)", ("rsa_rest", "rsa_amp_median_ms"), ("_atmung", "rsa_ms"), 1),
+    (
+        "Atemrate /min (praxis: Median 60-s-Fenster; hrv-core: ein Fenster gesamt)",
+        ("resp_rate_rest", "resp_rate_bpm"),
+        ("_atmung", "rate_pro_min"),
+        2,
+    ),
+    (
+        "RSA ms (praxis: Spline/Hilbert Median; hrv-core: atmung.rsa_ms)",
+        ("rsa_rest", "rsa_amp_median_ms"),
+        ("_atmung", "rsa_ms"),
+        1,
+    ),
 ]
 
 
@@ -76,27 +96,33 @@ def wert_pg(d, pfad):
 
 def wert_ta(d, variante, pfad):
     if pfad[0] == "_atmung":
-        return g(d, "atmung_gesamt", "ruhe", pfad[1]) if g(d, "atmung_gesamt", "ruhe") else g(d, "atmung_gesamt", "RUHE", pfad[1])
+        return (
+            g(d, "atmung_gesamt", "ruhe", pfad[1])
+            if g(d, "atmung_gesamt", "ruhe")
+            else g(d, "atmung_gesamt", "RUHE", pfad[1])
+        )
     v = g(d, "varianten", variante, *pfad)
     return len(v) if isinstance(v, list) else v
 
 
 def main() -> int:
-    teile = ["# Vorher/Nachher praxis_gui → hrv-core (Zahlen)\n",
-             "Erzeugt mit `scripts/vergleich_praxis_gui.py` aus `tests/golden/`. Vorher = praxis_gui nach",
-             "`auto_correct_runs` (Nullen interpoliert, Malik 0,20, scipy-Lomb, Kubios vor DFA). Nachher =",
-             "hrv-core Variante **vorgabe** (Nullen keine Artefakte, Malik 0,20/0,30, numpy-Lomb, kein Kubios);",
-             "**nullen** = hrv-core mit `Korrekturregeln(nullen=True)` — zeigt, welcher Teil der Differenz allein",
-             "von der Nullen-Regel kommt. Δ ist vorgabe gegen vorher.\n",
-             "**Frequenzbereich — Zeitachse ist der Hauptunterschied.** praxis_gui rechnete auf der",
-             "„echten“ Zeitachse `effective_rr_true()` (Wanduhr = Paketankunft, bei mehreren RR je Paket",
-             "zurückgerechnet). Am H10 kommen Pakete im 1-s-Takt; die Ankunft ist nicht der Schlagzeitpunkt.",
-             "Das wirkt als Zeitjitter und hebt HF: Generator „Kohärenzatmung 6/min“ (Wahrheit HF 67,5 ms²,",
-             "LF 6177 ms²) — praxis_gui Wanduhr HF 670 (10×), hrv-core Herzuhr HF 44,6; „Ruhe liegend“",
-             "praxis_gui 1115 gegen hrv-core 939 (+19 %). praxis_gui mit seiner eigenen Herzuhr-Option",
-             "(`frequenz_lomb_herzuhr` in den Golden-Dateien) liefert dieselben Werte wie hrv-core (ppm).",
-             "hrv-core rechnet je lückenfreiem Teilstück auf der Herzuhr (`Korrigiert.t_s`); Lücken trennen",
-             "die Teilstücke, die Wanduhr bestimmt nur, **wo** getrennt wird. Siehe docs/OFFENE_PUNKTE.md R11.\n"]
+    teile = [
+        "# Vorher/Nachher praxis_gui → hrv-core (Zahlen)\n",
+        "Erzeugt mit `scripts/vergleich_praxis_gui.py` aus `tests/golden/`. Vorher = praxis_gui nach",
+        "`auto_correct_runs` (Nullen interpoliert, Malik 0,20, scipy-Lomb, Kubios vor DFA). Nachher =",
+        "hrv-core Variante **vorgabe** (Nullen keine Artefakte, Malik 0,20/0,30, numpy-Lomb, kein Kubios);",
+        "**nullen** = hrv-core mit `Korrekturregeln(nullen=True)` — zeigt, welcher Teil der Differenz allein",
+        "von der Nullen-Regel kommt. Δ ist vorgabe gegen vorher.\n",
+        "**Frequenzbereich — Zeitachse ist der Hauptunterschied.** praxis_gui rechnete auf der",
+        "„echten“ Zeitachse `effective_rr_true()` (Wanduhr = Paketankunft, bei mehreren RR je Paket",
+        "zurückgerechnet). Am H10 kommen Pakete im 1-s-Takt; die Ankunft ist nicht der Schlagzeitpunkt.",
+        "Das wirkt als Zeitjitter und hebt HF: Generator „Kohärenzatmung 6/min“ (Wahrheit HF 67,5 ms²,",
+        "LF 6177 ms²) — praxis_gui Wanduhr HF 670 (10×), hrv-core Herzuhr HF 44,6; „Ruhe liegend“",
+        "praxis_gui 1115 gegen hrv-core 939 (+19 %). praxis_gui mit seiner eigenen Herzuhr-Option",
+        "(`frequenz_lomb_herzuhr` in den Golden-Dateien) liefert dieselben Werte wie hrv-core (ppm).",
+        "hrv-core rechnet je lückenfreiem Teilstück auf der Herzuhr (`Korrigiert.t_s`); Lücken trennen",
+        "die Teilstücke, die Wanduhr bestimmt nur, **wo** getrennt wird. Siehe docs/OFFENE_PUNKTE.md R11.\n",
+    ]
     for pg in sorted(PG.glob("*.json")):
         ta = TA / pg.name
         if not ta.is_file():
@@ -104,10 +130,15 @@ def main() -> int:
         a = json.loads(pg.read_text(encoding="utf-8"))
         b = json.loads(ta.read_text(encoding="utf-8"))
         teile.append(f"\n## {pg.stem}\n")
-        teile.append(f"Schläge roh {a['n_beats']}, Quelle `{a.get('intervall_quelle') or 'ekg_rr (Altdatei)'}`, "
-                     f"Nullen roh: {sum(1 for x in a['roh']['rr_ms'] if x == 0)}, "
-                     f"praxis_gui-Ketten: {g(a, 'automatik', 'ergebnis', 'runs')}, hrv-core-Ketten vorgabe/nullen: "
-                     f"{len(g(b, 'varianten', 'vorgabe', 'ketten') or [])}/{len(g(b, 'varianten', 'nullen', 'ketten') or [])}\n")
+        quelle = a.get("intervall_quelle") or "ekg_rr (Altdatei)"
+        nullen = sum(1 for x in (g(a, "roh", "rr_ms") or []) if x == 0)
+        ketten_vorgabe = len(g(b, "varianten", "vorgabe", "ketten") or [])
+        ketten_nullen = len(g(b, "varianten", "nullen", "ketten") or [])
+        teile.append(
+            f"Schläge roh {a.get('n_beats', '—')}, Quelle `{quelle}`, Nullen roh: {nullen}, "
+            f"praxis_gui-Ketten: {g(a, 'automatik', 'ergebnis', 'runs')}, "
+            f"hrv-core-Ketten vorgabe/nullen: {ketten_vorgabe}/{ketten_nullen}\n"
+        )
         teile.append("| Kennzahl | vorher praxis_gui | hrv-core vorgabe | Δ | hrv-core nullen |")
         teile.append("|---|---|---|---|---|")
         for titel, ppfad, tpfad, nk in ZEILEN:

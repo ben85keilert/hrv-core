@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Abhängigkeiten installieren
+        # Nur numpy und die Entwicklungsgruppe (pytest, ruff) — genau das, was die
+        # Bibliothek zur Laufzeit hat. scipy/neurokit2 kommen erst im Job „referenz“.
+        run: uv sync
+
+      - name: Linter
+        run: uv run --no-sync ruff check .
+
+      - name: Formatierung
+        run: uv run --no-sync ruff format --check .
+
+      - name: Tests, Doctests und Golden Master
+        # pyproject: testpaths = tests + src/hrv_core, --doctest-modules.
+        # tests/referenz/ überspringt sich ohne scipy/neurokit2 selbst (importorskip).
+        run: uv run --no-sync pytest -q
+
+  referenz:
+    # Beleg, dass die numpy-Fassungen dieselbe Mathematik rechnen wie scipy und
+    # neurokit2 — eigener Job, damit die Laufzeitumgebung oben schlank bleibt.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Abhängigkeiten mit Referenzbibliotheken installieren
+        run: uv sync --group referenz
+
+      - name: Referenztests
+        run: uv run --no-sync pytest tests/referenz -q

@@ -43,7 +43,8 @@ from typing import Any
 
 import numpy as np
 
-from .atmung import RUHE, fenster as atem_fenster
+from .atmung import RUHE
+from .atmung import fenster as atem_fenster
 from .constants import LANG_AB_S
 from .ereignisse import Zeitbezug
 from .frequency import Fensterspektrum, fensterspektrum, frequenzbereich

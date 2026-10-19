@@ -31,7 +31,7 @@ def _vergleiche(a, b, pfad: str, fehler: list[str]) -> None:
         if len(a) != len(b):
             fehler.append(f"{pfad}: Länge {len(a)} ≠ {len(b)}")
             return
-        for i, (x, y) in enumerate(zip(a, b)):
+        for i, (x, y) in enumerate(zip(a, b, strict=True)):
             _vergleiche(x, y, f"{pfad}[{i}]", fehler)
     elif isinstance(a, bool) or isinstance(b, bool):
         if a != b:
@@ -56,12 +56,17 @@ def test_golden_master(golden: Path) -> None:
     ist = referenz(fixture)
     fehler: list[str] = []
     _vergleiche(soll, ist, name, fehler)
-    assert not fehler, "\n".join(fehler[:20]) + (f"\n… {len(fehler)} Abweichungen" if len(fehler) > 20 else "")
+    assert not fehler, "\n".join(fehler[:20]) + (
+        f"\n… {len(fehler)} Abweichungen" if len(fehler) > 20 else ""
+    )
 
 
 def test_golden_deckt_alle_fixtures_ab() -> None:
     erwartet = {
-        f"{p.parent.name}__{p.stem}" for p in FIXTURES.rglob("sensor_*.json")
-        if not any(p.name.endswith(s) for s in ("_analyzed.json", "_ecg.json", "_ppg.json", "_truth.json"))
+        f"{p.parent.name}__{p.stem}"
+        for p in FIXTURES.rglob("sensor_*.json")
+        if not any(
+            p.name.endswith(s) for s in ("_analyzed.json", "_ecg.json", "_ppg.json", "_truth.json")
+        )
     }
     assert erwartet == {p.stem for p in _golden_dateien()}

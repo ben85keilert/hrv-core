@@ -154,7 +154,9 @@ def pruefen(wurzel: str | Path, *, ordnerregel: bool = True) -> Pruefbericht:
     if ordnerregel:
         for eintrag in sorted(wurzel.iterdir()):
             if eintrag.is_dir() and not ORDNER_MUSTER.match(eintrag.name):
-                bericht.ablehnungen.append((eintrag, "Ordnername folgt nicht dem Muster p### oder selbst"))
+                bericht.ablehnungen.append(
+                    (eintrag, "Ordnername folgt nicht dem Muster p### oder selbst")
+                )
     for datei in sorted(wurzel.rglob("*.json")):
         bericht.geprueft += 1
         try:

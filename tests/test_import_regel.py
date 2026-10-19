@@ -9,8 +9,20 @@ import ast
 from pathlib import Path
 
 PAKET = Path(__file__).resolve().parents[1] / "src" / "hrv_core"
-VERBOTEN = {"scipy", "neurokit2", "sklearn", "pandas", "PySide6", "PyQt5", "PyQt6", "flet",
-            "flet_ble", "trainingsapp", "praxislab", "matplotlib"}
+VERBOTEN = {
+    "scipy",
+    "neurokit2",
+    "sklearn",
+    "pandas",
+    "PySide6",
+    "PyQt5",
+    "PyQt6",
+    "flet",
+    "flet_ble",
+    "trainingsapp",
+    "praxislab",
+    "matplotlib",
+}
 
 
 def _importe(datei: Path):
