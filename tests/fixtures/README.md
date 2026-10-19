@@ -9,6 +9,7 @@ Alle Dateien sind durch `hrv_core.deid` gelaufen (`patient_id`/`behandlung_id` =
 | `generator/` | `praxis_gui/DataEvaluation/validierung_daten/generator/` — synthetisch, mit `truth-v1` |
 | `physionet/` | PhysioNet NSR nsr001/nsr002, öffentlich, im raw-v1-Format |
 | `trainingsapp/` | `trainingsapp/tests/golden/rr/` — siehe deren README (Golden-Sollwerte in den trainingsapp-Tests) |
+| `synthetisch/` | `scripts/fixture_synth_lang.py` (Seed 1, reproduzierbar): 5000 s mit bekannten Bändern (ULF 1800 / VLF 312 / LF 450 / HF 800 ms²), Randartefakt, Ketten aller drei Arten, Nullen, Messlücke, Notizen mit Marke — deckt den langen Spektralweg ab `LANG_AB_S` (ALGO 5/8) im Golden ab (T6) |
 
 ## Golden-Dateien
 

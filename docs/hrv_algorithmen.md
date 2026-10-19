@@ -719,10 +719,16 @@ Das gehört in jede Darstellung dieser Werte, nicht nur in diese Datei.
 
 ## Golden-Tests
 
-`tests/golden/rr/` enthält eine echte Messdatei aus `praxis_gui/Data/RR/`, eine
-synthetische Verity-Datei und zwei synthetische Messungen aus
-`praxis_gui/tools/generate_hrv_dataset.py` (Ruhe sitzend, Kohärenzatmung 6/min)
-mit bekannter Bandleistung. Frequenzbereich, DFA α1 und SampEn sind gegen
-praxis_gui auf denselben Dateien geprüft (`tests/test_frequenz.py`,
-`tests/test_nichtlinear.py`); den ganzen Korpus (15 Szenarien) liefert
-`generate_hrv_dataset.py --corpus`.
+`tests/fixtures/` (README dort) enthält echte Messdateien aus `praxis_gui/Data/RR/`
+(de-identifiziert), eine synthetische Verity-Datei, synthetische Messungen aus
+`praxis_gui/tools/generate_hrv_dataset.py` (Ruhe liegend/sitzend, Kohärenzatmung
+6/min) mit bekannter Bandleistung (`_truth.json`), zwei PhysioNet-NSR-Aufnahmen
+und seit 19.10.2026 eine synthetische 5000-s-Messung
+(`scripts/fixture_synth_lang.py`), die den langen Spektralweg ab `LANG_AB_S`
+samt Randartefakt, Ketten, Nullen und Messlücke abdeckt (T6). Zu jeder Fixture
+liegt unter `tests/golden/trainingsapp/` die vollständige Referenzrechnung
+(`hrv_core.referenz`, Toleranz 1e-9, `tests/test_golden_trainingsapp.py`);
+Frequenzbereich, DFA α1 und SampEn sind zusätzlich gegen praxis_gui
+(`tests/test_frequenz.py`, `tests/test_nichtlinear.py`) und gegen
+scipy/neurokit2 (`tests/referenz/`) geprüft. Den ganzen Generator-Korpus
+(15 Szenarien) liefert `generate_hrv_dataset.py --corpus` in praxis_gui.
