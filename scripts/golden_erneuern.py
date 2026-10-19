@@ -8,13 +8,13 @@ Vorher: Begründung in docs/, Notebook unter notebooks/, ALGO_VERSION hochzähle
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
 sys.path.insert(0, str(HIER.parent / "src"))
 
+from hrv_core.recording import json_atomar_schreiben  # noqa: E402
 from hrv_core.referenz import ist_rohdatei, referenz  # noqa: E402
 
 
@@ -30,8 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     args.ziel.mkdir(parents=True, exist_ok=True)
     for p in sorted(x for x in args.fixtures.rglob("sensor_*.json") if ist_rohdatei(x)):
         name = f"{p.parent.name}__{p.stem}.json"
-        with open(args.ziel / name, "w", encoding="utf-8") as fh:
-            json.dump(referenz(p), fh, ensure_ascii=False, separators=(",", ":"))
+        # atomar (T8): ein Abbruch mitten in der Rechnung lässt die alte Golden-Datei stehen
+        json_atomar_schreiben(args.ziel / name, referenz(p), kompakt=True)
         print("geschrieben:", name)
     return 0
 

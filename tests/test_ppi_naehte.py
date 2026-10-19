@@ -59,7 +59,7 @@ def _rmssd(diffs: list[int]) -> float:
 
 
 def test_algo_version_gezaehlt() -> None:
-    assert ALGO_VERSION == 7  # 7: Abschnitte je Teilstück (6: Vorgaben der Korrektur)
+    assert ALGO_VERSION == 8  # 8: Randartefakte, None statt 0 (7: Abschnitte je Teilstück)
 
 
 def test_golden_rmssd_nur_ueber_echte_nachbarn() -> None:

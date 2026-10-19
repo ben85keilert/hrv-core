@@ -119,6 +119,11 @@ FENSTER_MIN_ABDECKUNG_PCT = 70.0
 #: …und mindestens so viele gute Schläge
 FENSTER_MIN_SCHLAEGE = 30
 
+#: Toleranz an den Bandkanten (Hz): ``k/T`` liegt im Gleitkomma um 1e-17 neben
+#: 0,04, 0,15 oder 0,4 — bei T = 1800 s zählte der 0,04-Bin zum VLF und der
+#: 0,4-Bin zum HF (ALGO_VERSION 8, Befund R23). Jedes Raster ist viel gröber.
+KANTE_HZ = 1e-9
+
 
 # ---------------------------------------------------------------------------
 # Bausteine
@@ -306,6 +311,8 @@ def integriere_band(freqs: np.ndarray, power: np.ndarray, f_lo: float, f_hi: flo
     """Bandleistung per Trapezregel über ``f_lo <= f < f_hi``; NaN-Bins zählen nicht.
 
     ``None``, wenn kein Bin im Band liegt (wie praxis_gui ``_integrate_band``).
+    Die Kanten gelten mit `KANTE_HZ` Toleranz: ein Bin bei ``f_lo − 1e-17``
+    gehört dazu, einer bei ``f_hi − 1e-17`` nicht.
 
     >>> round(integriere_band(np.array([0.1, 0.2, 0.3]), np.ones(3), 0.1, 0.4) or 0, 6)
     0.2
@@ -314,10 +321,19 @@ def integriere_band(freqs: np.ndarray, power: np.ndarray, f_lo: float, f_hi: flo
     """
     freqs = np.asarray(freqs, dtype=float)
     power = np.asarray(power, dtype=float)
-    maske = (freqs >= f_lo) & (freqs < f_hi) & np.isfinite(power)
+    maske = _im_band(freqs, f_lo, f_hi) & np.isfinite(power)
     if not maske.any():
         return None
     return float(np.trapezoid(power[maske], freqs[maske]))
+
+
+def _im_band(freqs: np.ndarray, f_lo: float, f_hi: float) -> np.ndarray:
+    """``f_lo <= f < f_hi`` mit `KANTE_HZ` Toleranz an beiden Kanten.
+
+    >>> _im_band(np.array([0.039999999999999994, 0.1, 0.39999999999999997]), 0.04, 0.4).tolist()
+    [True, True, False]
+    """
+    return (freqs >= f_lo - KANTE_HZ) & (freqs < f_hi - KANTE_HZ)
 
 
 def gipfel_hz(
@@ -333,7 +349,7 @@ def gipfel_hz(
     """
     freqs = np.asarray(freqs, dtype=float)
     power = np.asarray(power, dtype=float)
-    maske = (freqs >= bereich[0]) & (freqs < bereich[1]) & np.isfinite(power)
+    maske = _im_band(freqs, *bereich) & np.isfinite(power)
     if not maske.any() or float(power[maske].max()) <= 0:
         return None
     return float(freqs[maske][int(np.argmax(power[maske]))])
@@ -416,6 +432,11 @@ class Spektrum:
 
         Weil das Gewicht innerhalb eines Bandes konstant ist, gilt exakt
         ``∫Band Mittel = Σ dauer_i · ∫Band P_i / Σ dauer_i``.
+
+        NaN in einem Teilspektrum (langer Weg: kein ULF- oder VLF-Teilspektrum
+        für dieses Teilstück) zählt je Bin nicht mit; ein Bin ohne jeden Wert
+        bleibt NaN, und `integriere_band` liefert dann ``None`` statt 0,0
+        (ALGO_VERSION 8).
         """
         idx = list(range(len(self.teilspektren))) if auswahl is None else list(auswahl)
         if not idx:
@@ -424,7 +445,13 @@ class Spektrum:
         if gewichte.sum() <= 0:
             gewichte = np.ones_like(gewichte)
         stapel = np.vstack([self.teilspektren[i] for i in idx])
-        return np.average(stapel, axis=0, weights=gewichte)
+        if not np.isnan(stapel).any():
+            return np.average(stapel, axis=0, weights=gewichte)
+        da = ~np.isnan(stapel)
+        gewicht_je_bin = (gewichte[:, None] * da).sum(axis=0)
+        summe = np.nansum(stapel * gewichte[:, None], axis=0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return np.where(gewicht_je_bin > 0, summe / gewicht_je_bin, np.nan)
 
 
 def _teilspektrum(
@@ -454,10 +481,18 @@ def _mittelreihe(t: np.ndarray, y: np.ndarray, breite_s: float) -> tuple[np.ndar
     Lomb braucht kein gleichmäßiges Raster — die mittlere Zeit der Schläge im
     Fach ist genauer als seine Mitte.
 
+    NaN in Zeit oder Wert (kaputte Datei, `Beat.from_dict` lässt ``NaN`` durch)
+    fällt vorher weg — sonst warf ``astype(int)``/``bincount`` (Befund R18).
+
     >>> t, y = _mittelreihe(np.array([0.1, 0.9, 1.2, 5.1]), np.array([1.0, 3.0, 5.0, 7.0]), 1.0)
     >>> [round(float(x), 3) for x in t], y.tolist()
     ([0.5, 1.2, 5.1], [2.0, 5.0, 7.0])
+    >>> _mittelreihe(np.array([0.1, np.nan]), np.array([1.0, 2.0]), 1.0)[1].tolist()
+    [1.0]
     """
+    ok = np.isfinite(t) & np.isfinite(y)
+    if not ok.all():
+        t, y = t[ok], y[ok]
     if t.size == 0:
         return np.array([]), np.array([])
     fach = np.floor((t - t[0]) / breite_s).astype(int)
@@ -526,10 +561,12 @@ def _teilspektrum_lang(seg: Segment, raster: tuple[np.ndarray, ...]) -> np.ndarr
     hoch = _gemittelt(t_mitte, seg.rr_ms, raster_hoch, LANG_FENSTER_S, MIN_BEATS_SEGMENT)
     if hoch is None:
         return None
+    # Fehlt ein Teilspektrum, steht dort NaN — nie Null: `Spektrum.mittel` lässt
+    # den Bin aus, `integriere_band` liefert ohne Wert ``None`` (ALGO_VERSION 8).
     return np.concatenate(
         [
-            ulf if ulf is not None else np.zeros_like(raster_ulf),
-            vlf if vlf is not None else np.zeros_like(raster_vlf),
+            ulf if ulf is not None else np.full_like(raster_ulf, np.nan),
+            vlf if vlf is not None else np.full_like(raster_vlf, np.nan),
             hoch,
         ]
     )
@@ -873,6 +910,12 @@ def fensterspektrum(
     zu wenig belegte Zeit (Summe der guten Intervalle / Fensterdauer) →
     ``None``. Raster: ``df = 1 / Fensterdauer`` bis 0,5 Hz.
 
+    Fenster über `LANG_AB_S` (4000 s) rechnen den **langen Weg** der
+    Gesamtmessung (`frequenzbereich` ohne Mindestdauer) über die guten Schläge
+    des Fensters auf ihrer echten Zeit — ein einzelner Lomb legte bei 8 h
+    Matrizen von 488 MB an und lief in den Deckel `MAX_GRID_BINS`, den
+    ALGO_VERSION 5 für die Gesamtmessung behoben hatte (ALGO_VERSION 8, R15).
+
     >>> t = np.cumsum(np.full(150, 800.0)) / 1000
     >>> rr = 800 + 30 * np.sin(2 * np.pi * 0.25 * t)
     >>> fs = fensterspektrum(t, rr, 0.0, 120.0)
@@ -884,7 +927,7 @@ def fensterspektrum(
     dauer = float(bis - von)
     if dauer <= 0 or t.size == 0:
         return None
-    im = (t > von) & (t <= bis) & np.isfinite(rr)
+    im = (t > von) & (t <= bis) & np.isfinite(rr) & np.isfinite(t)
     im &= gueltig_maske(rr)
     n = int(im.sum())
     if n < min_schlaege:
@@ -892,6 +935,10 @@ def fensterspektrum(
     belegt = float(rr[im].sum()) / 1000.0
     if belegt / dauer * 100.0 < min_abdeckung_pct:
         return None
+    if dauer > LANG_AB_S:
+        return Fensterspektrum.aus_frequenzbereich(
+            frequenzbereich(rr[im], t[im], mindestdauer=False)
+        )
     freqs = _raster(dauer)
     if freqs.size < 2:
         return None
@@ -929,7 +976,7 @@ def vlf_fenster(
     dauer = float(bis - von)
     if dauer <= 0 or t.size == 0:
         return None
-    im = (t > von) & (t <= bis) & np.isfinite(rr)
+    im = (t > von) & (t <= bis) & np.isfinite(rr) & np.isfinite(t)
     im &= gueltig_maske(rr)
     if int(im.sum()) < FENSTER_MIN_SCHLAEGE:
         return None
@@ -1009,6 +1056,7 @@ __all__ = [
     "BAND_MIN_DAUER_S",
     "FREQ_BANDS",
     "GIPFEL_BEREICH_HZ",
+    "KANTE_HZ",
     "SPEKTROGRAMM_FENSTER_S",
     "SPEKTROGRAMM_SCHRITT_S",
     "Fensterspektrum",

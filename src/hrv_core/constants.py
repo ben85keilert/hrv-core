@@ -45,7 +45,13 @@ from typing import Final
 #   Band (`fensterspektrum`), darüber der lange Weg der Gesamtmessung. Vorher ein
 #   einzelner Lomb auf der Herzuhr — über Nähte hinweg und bei Abschnitten über gut
 #   eine Stunde wieder im Deckel `MAX_GRID_BINS` (siehe 5).
-ALGO_VERSION: Final[int] = 7
+# 8 (2026-10-19, Durchsicht R15–R23): Randartefakte (Kette mit nur einem oder
+#   keinem gültigen Nachbarn) werden ausgeschlossen statt als Plateau interpoliert
+#   (`korrektur`, docs/korrektur.md); `None` statt 0,0 bei RMSSD/pNNx ohne Differenz,
+#   bei SD1/SD2 ohne SD2 und bei einem Band ohne Teilspektrum; Bandkanten mit
+#   1e-9-Hz-Toleranz (bei T = 1800 s zählte der 0,04-Bin zum VLF, der 0,4-Bin zum
+#   HF); `fensterspektrum` ab `LANG_AB_S` über den langen Weg. Golden erneuert.
+ALGO_VERSION: Final[int] = 8
 
 # ---------------------------------------------------------------------------
 # Plausibilitätsgrenzen für RR-Intervalle

@@ -292,3 +292,87 @@ def test_lange_messung_trifft_alle_baender(stunden: float) -> None:
     else:
         assert fd["ulf"] is None and fd["band_status"]["ulf"] != "ok"  # unter 4 h gesperrt
     assert dauer < 10  # 6 h: rund eine Sekunde
+
+
+# ---------------------------------------------------------------------------
+# Durchsicht 2026-10-19 (ALGO_VERSION 8): R15, R18, R20, R23
+# ---------------------------------------------------------------------------
+
+
+def test_fensterspektrum_ueber_lang_ab_s_nimmt_den_langen_weg() -> None:
+    """Befund R15: ein einzelner Lomb über 8 h brauchte 488 MB und lief in den Deckel."""
+    import time
+    import tracemalloc
+
+    from hrv_core.constants import LANG_AB_S
+    from hrv_core.frequency import fensterspektrum
+
+    rr, t = _lange_reihe(1.5)
+    tracemalloc.start()
+    start = time.perf_counter()
+    fs = fensterspektrum(t, rr, 0.0, float(t[-1]))
+    dauer = time.perf_counter() - start
+    _, spitze = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert fs is not None and float(t[-1]) > LANG_AB_S
+    assert fs.werte["lf"] == pytest.approx(463, rel=0.1)
+    assert fs.werte["hf"] == pytest.approx(845, rel=0.1)
+    assert fs.freqs[1] - fs.freqs[0] < 1e-3  # feines ULF-Raster, kein 2000-Bin-Deckel
+    assert spitze < 100 * 1024 * 1024 and dauer < 10
+
+
+def test_mittelreihe_und_vlf_fenster_vertragen_nan_in_der_zeit() -> None:
+    """Befund R18: NaN in `t` warf in `np.bincount` — jetzt fällt der Schlag weg."""
+    from hrv_core.frequency import _mittelreihe, vlf_fenster
+
+    t = np.cumsum(np.full(2000, 900.0)) / 1000
+    rr = 900 + 30 * np.sin(2 * np.pi * 0.01 * t)
+    t_nan = t.copy()
+    t_nan[100] = np.nan
+    zt, zy = _mittelreihe(t_nan, rr, 2.0)
+    assert np.isfinite(zt).all() and np.isfinite(zy).all()
+    assert vlf_fenster(t_nan, rr, 0.0, 1200.0) == pytest.approx(450, rel=0.1)
+
+
+def test_fehlendes_teilspektrum_ergibt_none_statt_null() -> None:
+    """Befund R20: Nullen für ein fehlendes ULF/VLF-Teilspektrum wurden zu 0,0 ms²."""
+    from hrv_core.frequency import Spektrum, integriere_band
+
+    freqs = np.array([0.001, 0.002, 0.01, 0.1])
+    sp = Spektrum(
+        freqs=freqs,
+        teilspektren=[np.array([np.nan, np.nan, 2.0, 4.0]), np.array([np.nan, np.nan, 4.0, 8.0])],
+        dauer_s=[100.0, 300.0],
+        n_schlaege=[100, 300],
+        methode="lomb",
+        lang=True,
+    )
+    mittel = sp.mittel()
+    assert np.isnan(mittel[:2]).all()
+    assert mittel[2] == pytest.approx(3.5) and mittel[3] == pytest.approx(7.0)
+    assert integriere_band(freqs, mittel, 0.0001, 0.003) is None
+    # ein Teilstück mit Wert reicht: gewichtet nur über die vorhandenen
+    sp2 = Spektrum(
+        freqs,
+        [np.array([1.0, 1.0, 2.0, 4.0]), sp.teilspektren[1]],
+        [100.0, 300.0],
+        [100, 300],
+        "lomb",
+        True,
+    )
+    assert sp2.mittel()[0] == pytest.approx(1.0)
+
+
+def test_bandkanten_sind_gleitkommafest() -> None:
+    """Befund R23: bei T = 1800 s liegt der 0,04-Bin bei 0,039999999999999994 und der
+    0,4-Bin bei 0,39999999999999997 — die Kante muss trotzdem gelten."""
+    from hrv_core.frequency import _raster, integriere_band
+
+    raster = _raster(1800.0)
+    power = np.zeros_like(raster)
+    power[np.isclose(raster, 0.04)] = 1.0  # genau ein Bin an der unteren LF-Kante
+    assert integriere_band(raster, power, 0.003, 0.04) == 0.0  # VLF: Kante ausschließlich
+    assert integriere_band(raster, power, 0.04, 0.15) > 0.0  # LF: Kante einschließlich
+    power[:] = 0.0
+    power[np.isclose(raster, 0.4)] = 1.0
+    assert integriere_band(raster, power, 0.15, 0.4) == 0.0  # HF endet vor 0,4

@@ -317,6 +317,17 @@ def automatisch(
     t_herz = [b.t_s for b in rec.beats]
     # Dauer der bis zu jedem Schlag verworfenen Intervalle (0 ohne ppi_pakete)
     verworfen = [v - h for v, h in zip(schlagzeiten(rec), t_herz, strict=True)]
+    # Anker einer Interpolation sind gültige Schläge außerhalb jeder Kette (wie
+    # `_naechster_anker`). Eine Kette ohne Anker auf einer Seite — am Anfang oder
+    # Ende der Messung, oder nur Nullen davor — wird ausgeschlossen: Ein Plateau
+    # aus dem einzigen Nachbarn wäre ein erfundener Wert (ALGO_VERSION 8).
+    anker = [
+        i
+        for i in range(n)
+        if i not in gruende and i not in ohne_rr and RR_MIN_MS <= rr[i] <= RR_MAX_MS
+    ]
+    erster_anker = anker[0] if anker else n
+    letzter_anker = anker[-1] if anker else -1
     ketten: list[Kette] = []
     for lo, hi in laeufe:
         indizes = [i for i in range(lo, hi + 1) if i in gruende]
@@ -324,10 +335,14 @@ def automatisch(
         luecke = _ungedeckt_s(t_wand, rr, lo, hi, verworfen)
         alle = set().union(*(gruende[i] for i in indizes))
         grund = ", ".join(g for g in reihenfolge if g in alle)
-        if n_schlaege > unsicher_max or luecke > max_luecke_s:
-            zusatz = (
-                f"Lücke {_komma(luecke)} s" if luecke > max_luecke_s else f"{n_schlaege} Schläge"
-            )
+        am_rand = erster_anker > lo or letzter_anker < hi
+        if n_schlaege > unsicher_max or luecke > max_luecke_s or am_rand:
+            if luecke > max_luecke_s:
+                zusatz = f"Lücke {_komma(luecke)} s"
+            elif n_schlaege > unsicher_max:
+                zusatz = f"{n_schlaege} Schläge"
+            else:
+                zusatz = "am Rand"
             ketten.append(
                 Kette(
                     start=lo,
@@ -494,26 +509,30 @@ def _naechster_anker(
 
 def _interpolationswerte(
     rr: np.ndarray, nach_index: dict[int, Korrektur], ungueltig: set[int]
-) -> dict[int, float]:
+) -> tuple[dict[int, float], set[int]]:
     """Interpolierte Werte, kettenweise linear zwischen den äußeren Ankern.
 
     Kein Plateau: eine 5er-Kette bekommt eine Rampe, nicht fünfmal denselben
     Mittelwert — das würde die Kurzzeitvariabilität künstlich glätten.
+
+    Rückgabe ``(werte, loeschen)``: Eine Kette mit nur einem oder keinem Anker
+    (Randartefakt, Sidecar aus praxis_gui) bekommt keinen Wert, sondern wird
+    gelöscht — bis ALGO_VERSION 7 kopierte sie den einzigen Nachbarn (Plateau)
+    oder ließ den Rohwert stehen; praxis_gui tut das weiter (docs/korrektur.md).
     """
     werte: dict[int, float] = {}
+    loeschen: set[int] = set()
     idx = sorted(i for i, k in nach_index.items() if k.op == "interpolate")
 
     def fuellen(kette: list[int]) -> None:
         links = _naechster_anker(rr, kette[0], -1, ungueltig, nach_index)
         rechts = _naechster_anker(rr, kette[-1], +1, ungueltig, nach_index)
+        if links is None or rechts is None:
+            loeschen.update(kette)
+            return
         m = len(kette)
         for pos, ci in enumerate(kette, start=1):
-            if links is not None and rechts is not None:
-                werte[ci] = links + (rechts - links) * pos / (m + 1)
-            elif links is not None or rechts is not None:
-                werte[ci] = float(links if links is not None else rechts)  # type: ignore[arg-type]
-            else:
-                werte[ci] = float(rr[ci])
+            werte[ci] = links + (rechts - links) * pos / (m + 1)
 
     kette: list[int] = []
     for i in idx:
@@ -523,7 +542,7 @@ def _interpolationswerte(
         kette.append(i)
     if kette:
         fuellen(kette)
-    return werte
+    return werte, loeschen
 
 
 def naehte(rec: Recording) -> list[int]:
@@ -570,7 +589,8 @@ def anwenden(rec: Recording, korrekturen: list[Korrektur]) -> Korrigiert:
     auch ohne Korrektur — für Messlücken und vom Gerät verworfene Intervalle
     (`naehte`). Nicht korrigierte
     Nullen und implausible Werte bleiben stehen — `kennzahlen` verwirft sie
-    über den Plausibilitätsfilter.
+    über den Plausibilitätsfilter. Ein ``interpolate`` ohne zwei gültige Anker
+    (Randartefakt) wirkt wie ``delete`` (ALGO_VERSION 8, `_interpolationswerte`).
 
     >>> from hrv_core.recording import Beat
     >>> rec = Recording(beats=[Beat(t_s=0.8 * (i + 1), rr_ms=x) for i, x in
@@ -580,6 +600,9 @@ def anwenden(rec: Recording, korrekturen: list[Korrektur]) -> Korrigiert:
     ([800.0, 820.0, 830.0, 840.0, 800.0, 810.0], 'interp')
     >>> anwenden(rec, [Korrektur("exclude_range", 1, 1.6, 820.0, beat_index_end=2)]).breaks
     [1]
+    >>> rand = anwenden(rec, [Korrektur("interpolate", 0, 0.8, 800.0)])  # nur ein Anker
+    >>> rand.rr_ms[:2], rand.entfernt, rand.breaks
+    ([820.0, 1600.0], 1, [])
     """
     rr = np.asarray(rec.rr_ms, dtype=float)
     n = rr.size
@@ -598,7 +621,7 @@ def anwenden(rec: Recording, korrekturen: list[Korrektur]) -> Korrigiert:
         if eintrag.op == "exclude_range":
             ausgeschlossen.update(range(lo, hi + 1))
 
-    interp = _interpolationswerte(rr, nach_index, ungueltig)
+    interp, loeschen = _interpolationswerte(rr, nach_index, ungueltig)
 
     out: list[float] = []
     roh: list[int] = []
@@ -617,7 +640,7 @@ def anwenden(rec: Recording, korrekturen: list[Korrektur]) -> Korrigiert:
         if k is None:
             out.append(float(rr[i]))
             roh.append(i)
-        elif k.op == "delete":
+        elif k.op == "delete" or i in loeschen:
             entfernt += 1
             if out:
                 breaks.append(len(out))

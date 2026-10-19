@@ -54,6 +54,10 @@ rmssd = np.sqrt((diffs**2).mean())  # diffs überspringen Nähte, s. u.
 
 `compute_time_domain` liefert **`None`** statt Nullwerten, wenn zu wenige
 Schläge vorliegen. Eine fehlende Messung ist keine Messung mit dem Wert null.
+Seit `ALGO_VERSION` 8 gilt das auch innerhalb des Ergebnisses: Bleibt nach den
+Nähten keine Differenz übrig (`n_diffs = 0`, etwa ein kurzer Abschnitt mit
+einer Naht in der Mitte), sind `rmssd` und `pnn50` `None` — bis dahin stand
+dort 0,0, und ein Abschnitt zeigte „RMSSD 0“ (Befund R17).
 
 ---
 
@@ -307,7 +311,9 @@ praxis_gui, Vertrag Abschnitt 10):
 
 Je Rasterpunkt `t_e` gehen die Schläge mit `t_e − Fenster < t ≤ t_e` ein,
 Definitionen wie `time_domain`; NaN und Nähte trennen, unter der Mindestzahl
-bleibt eine Lücke. Live rechnen die Kurven auf den guten Rohwerten (Artefakte
+bleibt eine Lücke. Implausible Werte (außerhalb 250–2000 ms) setzen `verlauf`
+und `aktuell` selbst auf NaN (seit `ALGO_VERSION` 8; `trends.reihe` und
+`LiveFenster.verlaufsreihe` taten das schon — für sie ändert sich nichts). Live rechnen die Kurven auf den guten Rohwerten (Artefakte
 als Naht, wie `kennzahlen`), in der Aufzeichnung auf der korrigierten Reihe.
 
 - **Ø HF und Ø RR ab 3-s-Fenstern.** Für einen Mittelwert genügt ein Schlag im
@@ -457,7 +463,7 @@ Nachkommastellen; die Spektralkurve stimmt auf alle Stellen.
 | | ganze Aufzeichnung | Fenster (Kurven, Live) |
 |---|---|---|
 | Funktion | `frequenzbereich` → `compute_frequency_domain` | `fensterspektrum` |
-| Zerlegung | Teilstücke an Nähten und unplausiblen Werten, je eines ab 60 Schlägen | keine — ein Lomb über alle guten Schläge des Fensters |
+| Zerlegung | Teilstücke an Nähten und unplausiblen Werten, je eines ab 60 Schlägen | keine — ein Lomb über alle guten Schläge des Fensters; ab `LANG_AB_S` (4000 s) der lange Weg auf diesen Schlägen (s. u.) |
 | Mittelung | nach Dauer gewichtet, je Band nur taugliche Teilstücke | — |
 | Mindestdauer je Band | ja (sonst gesperrt) | nein, die Fensterlänge wählt der Anwender (`reif` sagt, ob sie reicht) |
 | Mindestbelegung | Bandpolitik (≥ 50 % durch taugliche Teilstücke) | ≥ 30 gute Schläge und ≥ 70 % der Fensterzeit belegt |
@@ -567,6 +573,23 @@ HF ≈ 845 ms² inklusive Rauschen):
 | 8 h | 3317 / 5863 | 1791 / 322 / 485 / 841 | 1,0 s |
 | 24 h | – | 1793 / 323 / 486 / 840 | 2,4 s |
 
+**Fenster über `LANG_AB_S`** (`fensterspektrum`, seit `ALGO_VERSION` 8): Ein
+einzelner Lomb über ein 8-h-Fenster (34 000 Schläge) legte Matrizen von 488 MB
+an und lief wieder in den Deckel `MAX_GRID_BINS` — genau der Fehler, den ALGO 5
+für die Gesamtmessung behob (Befund R15). Darum rechnet auch `fensterspektrum`
+ab 4000 s den langen Weg: `frequenzbereich(mindestdauer=False)` über die guten
+Schläge des Fensters auf ihrer echten Zeit (wie `abschnitt_spektrum` seit
+ALGO 7); das Ergebnis trägt dieselbe Form (`Fensterspektrum.aus_frequenzbereich`).
+
+**Fehlende Teilspektren und Rasterkanten** (`ALGO_VERSION` 8): Liefert der lange
+Weg für ein Teilstück kein ULF- oder VLF-Teilspektrum (zu wenige Mittelwerte),
+steht dort NaN statt Nullen; `Spektrum.mittel` mittelt je Bin über die
+Teilstücke, die einen Wert haben, und ein Band ohne jeden Wert ist `None`, nicht
+0,0 (Befund R20). Die Bandgrenzen gelten „von einschließlich bis
+ausschließlich“ — mit einer Toleranz von 1e-9 Hz an den Kanten, weil `k/T` im
+Gleitkomma um 1e-17 neben 0,04, 0,15 oder 0,4 liegen kann (bei `T` = 1800 s
+zählte der 0,04-Bin zum VLF, der 0,4-Bin zum HF; Befund R23).
+
 Kürzere Messungen rechnen unverändert (Golden-Tests). Die **VLF-Kurve**
 (`vlf_power`, Fenster 20/30/60 min) rechnet je Fenster ebenso sparsam
 (`frequency.vlf_fenster`: 2-s-Mittel, Hann, Raster nur 0,003–0,04 Hz); **ULF**
@@ -652,6 +675,10 @@ SD2 = √(2·SDNN² − SD1²)
 ```
 
 Die zweite Formel kann durch Rundung minimal negativ werden — bei 0 abschneiden.
+Bleibt dabei nur ein Rundungsrest (`SD2 ≤ 1e-6 · SDNN`, etwa bei einer streng
+abwechselnden Reihe), ist `sd1_sd2` **`None`** statt eines Verhältnisses von
+10⁷ (`ALGO_VERSION` 8, Befund R19); ohne eine einzige Differenz (nur Nähte)
+gibt es gar kein Poincaré-Ergebnis.
 
 ### DFA α1 (`nonlinear.compute_dfa_alpha1`)
 

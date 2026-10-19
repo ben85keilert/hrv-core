@@ -485,3 +485,36 @@ def test_aussetzer_wird_am_langen_intervall_erkannt() -> None:
     (kette,) = [k for k in ketten if k.start <= 51 <= k.ende]
     assert "Malik" in kette.grund
     assert 50 not in {v.beat_index for v in kette.vorschlag}  # die Null selbst bleibt
+
+
+# ---------------------------------------------------------------------------
+# Randartefakte (ALGO_VERSION 8, Befund R21)
+# ---------------------------------------------------------------------------
+
+
+def test_randartefakt_wird_ausgeschlossen_statt_plateau() -> None:
+    """Ein Artefakt am Anfang hat nur einen Anker — kein Plateau aus dem Nachbarn."""
+    rec = messung([3000, 800, 810, 790, 805, 800, 795, 810])
+    ketten = automatisch(rec)
+    assert [(k.start, k.ende, k.art) for k in ketten] == [(0, 0, "ausschliessen")]
+    assert ketten[0].grund.endswith("am Rand")
+    korr = anwenden(rec, [k for kette in ketten for k in kette.vorschlag])
+    assert korr.rr_ms[0] == 800.0 and korr.entfernt == 1 and korr.breaks == []
+
+
+def test_randartefakt_am_ende_und_hinter_nullen() -> None:
+    rec = messung([0, 0, 1900, 800, 810, 790, 805, 800, 795, 2500])
+    arten = {k.start: k.art for k in automatisch(rec)}
+    assert arten == {2: "ausschliessen", 9: "ausschliessen"}
+
+
+def test_gespeicherte_interpolation_ohne_anker_wird_geloescht() -> None:
+    """Sidecar aus praxis_gui: `interpolate` am Rand wirkt wie `delete`, nie wie ein Plateau."""
+    rec = messung([800, 810, 790, 805, 3000])
+    korr = anwenden(rec, [Korrektur("interpolate", 4, 4.0, 3000.0)])
+    assert korr.rr_ms == [800.0, 810.0, 790.0, 805.0]
+    assert korr.entfernt == 1 and korr.interpoliert == 0
+    # ohne jeden Anker: alles weg, nichts bleibt roh stehen
+    rec = messung([3000, 2600])
+    korr = anwenden(rec, [Korrektur("interpolate", i, 0.0, 3000.0) for i in (0, 1)])
+    assert korr.rr_ms == [] and korr.entfernt == 2

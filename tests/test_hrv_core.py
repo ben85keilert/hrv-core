@@ -234,3 +234,24 @@ def test_poincare_formeln() -> None:
 
 def test_poincare_braucht_genug_schlaege() -> None:
     assert compute_poincare([800.0] * 10) is None
+
+
+# ---------------------------------------------------------------------------
+# None statt 0 (ALGO_VERSION 8, Befunde R17 und R19)
+# ---------------------------------------------------------------------------
+
+
+def test_ohne_differenz_sind_rmssd_und_pnn_none() -> None:
+    r = compute_time_domain([800, 810], breaks=[1])
+    assert r is not None
+    assert r["n"] == 2 and r["n_diffs"] == 0
+    assert r["rmssd"] is None and r["pnn50"] is None
+    assert r["sdnn"] == pytest.approx(5.0)
+
+
+def test_poincare_ohne_sd2_hat_kein_verhaeltnis() -> None:
+    r = compute_poincare([800, 810] * 60)
+    assert r is not None
+    assert r["sd1"] > 0 and r["sd2"] < 1e-6 and r["sd1_sd2"] is None
+    assert compute_poincare([800] * 40)["sd1_sd2"] is None  # konstant: SDNN 0
+    assert compute_poincare([800, 810] * 30, breaks=list(range(1, 60))) is None  # nur Nähte

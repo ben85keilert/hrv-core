@@ -346,7 +346,7 @@ def verlauf(
     [(10.0, 810), (20.0, 809), (30.0, 810)]
     """
     t_arr = np.asarray(t, dtype=float)
-    rr_arr = np.asarray(rr, dtype=float)
+    rr_arr = _plausibel(rr)
     naht_arr = np.asarray(naht, dtype=bool)
     if t_arr.size == 0 or fenster_s <= 0:
         return []
@@ -410,7 +410,7 @@ def aktuell(
     t_arr = np.asarray(t, dtype=float)
     if t_arr.size == 0 or fenster_s <= 0:
         return None
-    rr_arr = np.asarray(rr, dtype=float)
+    rr_arr = _plausibel(rr)
     naht_arr = np.asarray(naht, dtype=bool)
     te = float(t_arr[-1]) if ende is None else float(ende)
     hi = int(np.searchsorted(t_arr, te, side="right"))
@@ -587,6 +587,19 @@ def treppe(
         out += [(round(a, 3), wert), (round(b, 3), wert)]
         vorher = ende
     return out, naehte
+
+
+def _plausibel(rr: Sequence[float] | np.ndarray) -> np.ndarray:
+    """RR als float-Reihe; implausible Werte (außerhalb 250–2000 ms) sind NaN.
+
+    `verlauf` und `aktuell` verlassen sich damit nicht auf `reihe` oder
+    `LiveFenster.verlaufsreihe` — ``100 × 0 ms`` ergab vorher RMSSD 0,0 (Befund R22).
+
+    >>> _plausibel([800.0, 0.0, -800.0, 2600.0]).tolist()
+    [800.0, nan, nan, nan]
+    """
+    arr = np.asarray(rr, dtype=float)
+    return np.where((arr >= RR_MIN_MS) & (arr <= RR_MAX_MS), arr, np.nan)
 
 
 def reihe(

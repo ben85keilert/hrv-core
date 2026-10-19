@@ -30,6 +30,10 @@ from .constants import (
 )
 from .segments import filter_rr, segment_diffs
 
+#: Unter diesem Anteil von SDNN ist SD2 nur noch ein Rundungsrest der Formel —
+#: dann gibt es kein Verhältnis SD1/SD2 (ALGO_VERSION 8, Befund R19).
+SD2_MIN_REL: float = 1e-6
+
 
 def compute_poincare(
     rr_ms,
@@ -45,17 +49,22 @@ def compute_poincare(
         SD2 = √(2·SDNN² − SD1²)
 
     Die zweite Formel kann durch Rundung minimal negativ werden — deshalb bei
-    0 abgeschnitten.
+    0 abgeschnitten. Bleibt nur ein Rundungsrest (``sd2 <= SD2_MIN_REL · sdnn``,
+    etwa bei einer streng abwechselnden Reihe), ist ``sd1_sd2`` ``None`` statt
+    eines Verhältnisses von 10⁷. Ohne eine einzige Differenz (nur Nähte) gibt es
+    kein Ergebnis.
 
     >>> r = compute_poincare([800, 810, 790, 805, 795] * 8)
     >>> r["sd1"] > 0 and r["sd2"] > 0
     True
+    >>> compute_poincare([800, 810] * 60)["sd1_sd2"] is None  # SD2 nur Rundungsrest
+    True
     """
     valide, diffs = segment_diffs(rr_ms, breaks, skip_seams)
-    if valide.size < MIN_BEATS_NONLINEAR:
+    if valide.size < MIN_BEATS_NONLINEAR or diffs.size == 0:
         return None
 
-    rmssd = float(np.sqrt((diffs**2).mean())) if diffs.size else 0.0
+    rmssd = float(np.sqrt((diffs**2).mean()))
     sdnn = float(valide.std(ddof=0))
 
     sd1 = rmssd / np.sqrt(2.0)
@@ -64,7 +73,7 @@ def compute_poincare(
     return {
         "sd1": float(sd1),
         "sd2": sd2,
-        "sd1_sd2": float(sd1 / sd2) if sd2 > 0 else 0.0,
+        "sd1_sd2": float(sd1 / sd2) if sd2 > SD2_MIN_REL * sdnn and sd2 > 0 else None,
         "n": int(valide.size),
     }
 
@@ -200,6 +209,7 @@ def compute_sampen(
 
 
 __all__ = [
+    "SD2_MIN_REL",
     "compute_dfa_alpha1",
     "compute_poincare",
     "compute_sampen",

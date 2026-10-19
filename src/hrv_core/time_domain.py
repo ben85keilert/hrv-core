@@ -36,7 +36,12 @@ def compute_time_domain(
     Returns:
         Dictionary mit den Kennzahlen, oder ``None``, wenn zu wenige Schläge
         vorliegen. Bewusst ``None`` statt 0.0 — eine fehlende Messung ist keine
-        Messung mit dem Wert null.
+        Messung mit dem Wert null. Dasselbe gilt für ``rmssd`` und ``pnn50``,
+        wenn nach den Nähten keine Differenz übrig bleibt (``n_diffs == 0``,
+        ALGO_VERSION 8).
+
+    >>> compute_time_domain([800, 810], breaks=[1])["rmssd"] is None
+    True
 
     >>> r = compute_time_domain([800, 810, 790, 805])
     >>> round(r["mean_rr"], 2)
@@ -51,9 +56,9 @@ def compute_time_domain(
 
     mean_rr = float(valide.mean())
     sdnn = float(valide.std(ddof=0))
-    rmssd = float(np.sqrt((diffs**2).mean())) if diffs.size else 0.0
+    rmssd = float(np.sqrt((diffs**2).mean())) if diffs.size else None
     pnn = (
-        float((np.abs(diffs) > pnn_threshold_ms).sum() / diffs.size * 100.0) if diffs.size else 0.0
+        float((np.abs(diffs) > pnn_threshold_ms).sum() / diffs.size * 100.0) if diffs.size else None
     )
 
     return {

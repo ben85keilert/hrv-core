@@ -152,3 +152,14 @@ def test_vlf_kurve_ueber_lange_messung_mit_eigener_rechnung(monkeypatch) -> None
     punkte = verlauf(t, rr, np.zeros(n, dtype=bool), "vlf_power", 1200)
     assert not teuer and punkte
     assert all(w == pytest.approx(450, rel=0.2) for _, w in punkte)  # Varianz 30²/2
+
+
+def test_verlauf_filtert_implausible_werte_selbst() -> None:
+    """Befund R22: 100 × 0 ms oder −800 ergaben RMSSD 0,0 — jetzt keine Punkte."""
+    t = [0.8 * (i + 1) for i in range(100)]
+    assert verlauf(t, [0.0] * 100, [False] * 100, "rmssd", 30) == []
+    assert verlauf(t, [-800.0] * 100, [False] * 100, "mean_rr", 10) == []
+    assert aktuell(t, [2600.0] * 100, [False] * 100, "sdnn", 30) is None
+    gemischt = [800.0, 0.0] * 50
+    punkte = verlauf(t, gemischt, [False] * 100, "mean_rr", 10)
+    assert punkte and all(v == pytest.approx(800.0) for _, v in punkte)

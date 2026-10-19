@@ -2,7 +2,7 @@
 
 # Automatische Korrektur: was zählt und warum
 
-Stand 14.10.2026, `ALGO_VERSION` 6. Code: `src/hrv_core/regeln.py` (Vorgaben),
+Stand 19.10.2026, `ALGO_VERSION` 8. Code: `src/hrv_core/regeln.py` (Vorgaben),
 `src/hrv_core/korrektur.py` (Automatik), `src/hrv_core/ppi.py` (Verity Sense),
 `src/hrv_core/live.py` (live). Formeln und Fallstricke: [hrv_algorithmen.md](hrv_algorithmen.md).
 
@@ -86,6 +86,18 @@ Artefakte, zwischen denen höchstens 2 gute Schläge liegen, bilden eine **Kette
 | 1–2 Schläge | interpolieren, linear zwischen den gültigen Nachbarn |
 | 3–5 Schläge | interpolieren, als *unsicher* markiert |
 | mehr als 5 Schläge, oder mehr als 3 s Wanduhrzeit, die kein Intervall füllt | ausschließen (Naht) |
+| am Anfang oder Ende der Messung (auf einer Seite kein gültiger Nachbar) | ausschließen (Naht), seit `ALGO_VERSION` 8 |
+
+**Randartefakte** (ALGO_VERSION 8, 19.10.2026): Eine Interpolation braucht zwei
+Anker. Hat eine Kette nur einen — sie beginnt mit dem ersten oder endet mit dem
+letzten Schlag, oder davor stehen nur Nullen —, kopierte die Rampe bis
+ALGO_VERSION 7 den einzigen Nachbarn (Plateau, wie praxis_gui); ohne Anker
+blieb der Rohwert stehen und zählte, sofern er innerhalb 250–2000 ms lag (ein
+Malik-Ausreißer am Rand). Beides sind erfundene Werte. Jetzt schlägt die
+Automatik für solche Ketten den Ausschluss vor, und `anwenden` behandelt
+**jede** gespeicherte Interpolation ohne zwei Anker wie `delete` — auch aus
+einem Sidecar von praxis_gui, das dort weiter ein Plateau rechnet (bewusste
+Abweichung, `docs/VERGLEICH.md`). Ben, 19.10.2026: lieber eine Lücke.
 
 Beim Öffnen einer Aufzeichnung sind **alle** Vorschläge übernommen. Wer eine
 Kette abwählt, entscheidet sich bewusst dafür, dass dort der Rohwert zählt.
@@ -94,7 +106,9 @@ Kette abwählt, entscheidet sich bewusst dafür, dass dort der Rohwert zählt.
 
 Über eine **Naht** wird keine Schlag-zu-Schlag-Differenz gebildet. Das betrifft
 RMSSD, pNN50 und SD1. SDNN und die mittlere Herzfrequenz zählen die Schläge
-davor und danach trotzdem. Reicht es für eine Kennzahl nicht, steht „–“ statt 0.
+davor und danach trotzdem. Reicht es für eine Kennzahl nicht, steht „–“ statt 0 —
+auch dann, wenn nach den Nähten keine einzige Differenz übrig bleibt (RMSSD,
+pNNx, SD1: `None` statt 0,0 seit `ALGO_VERSION` 8).
 
 **Live** gelten die Regeln 1–6. Erkannte Artefakte zählen dort nicht mit und
 wirken wie eine Naht. Ketten plant erst die Aufzeichnung.
@@ -253,6 +267,7 @@ selbst.
 | 3 (13.10.) | Messlücken bei PPI auf der Herzuhr aller Intervalle |
 | 4 (13.10.) | verworfene Intervalle selbst prüfen (Vorgabe), einstellbare Regeln, Vorauswahl „sicher“ |
 | 6 (14.10.) | wieder dem Sensor folgen; Vorauswahl „alle“ |
+| 8 (19.10.) | Randartefakte (nur ein Anker) ausschließen statt Plateau, ohne Anker ebenso; `None` statt 0 bei RMSSD/pNNx ohne Differenz und bei SD1/SD2 ohne SD2 (hrv_algorithmen.md, ALGO_VERSION 8) |
 
 ---
 
