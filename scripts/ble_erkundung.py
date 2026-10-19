@@ -396,8 +396,10 @@ async def erkunden(adresse: str, dauer: float, lauschen: bool, ordner: Path) -> 
             chars = []
             for ch in svc.characteristics:
                 props = ",".join(ch.properties)
-                eintrag = {"uuid": kurz(ch.uuid), "props": props}
-                print(f"      {kurz(ch.uuid):<36} {props}")
+                # Handle mit ausgeben: in einem HCI-Mitschnitt (Wireshark) stehen nur Handles,
+                # keine UUIDs — die Tabelle hier ist der Schlüssel dazu.
+                eintrag = {"uuid": kurz(ch.uuid), "handle": ch.handle, "props": props}
+                print(f"      {kurz(ch.uuid):<36} 0x{ch.handle:04x}  {props}")
                 if (
                     kurz(svc.uuid) == "180a"
                     and kurz(ch.uuid) in GERAETEINFO

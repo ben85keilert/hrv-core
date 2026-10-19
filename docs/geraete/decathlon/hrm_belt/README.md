@@ -18,6 +18,7 @@
 | `README.md` | dieser Befund |
 | `erkundung_2026-10-19_roh.jsonl` | Rohmitschnitt von `scripts/ble_erkundung.py`: Kopf, 90 HR-Pakete (Hex, Ankunftszeit), Ereignisse |
 | `erkundung_2026-10-19_befund.json` | Dienste und Charakteristiken, Geräteinformation, Kennzahlen des HR-Stroms, Hinweise |
+| `runbook_app_mitschnitt.md` | Anleitung: Verkehr der Decathlon-Coach-App mit dem Gurt mitschneiden (Android HCI-Snoop, Wireshark) und auswerten — klärt, ob der herstellereigene Kanal benutzt wird |
 
 Befund vom 19.10.2026 am Gerät mit `scripts/ble_erkundung.py` (45 s, `--lauschen`) und einer
 Aufnahme in praxis_gui (Profil „Brustgurt (Standardprofil)“). Vergleichsgerät: Polar H10.
@@ -66,6 +67,8 @@ Gurt mitzuschneiden (Android HCI-Snoop-Log) und zu sehen, ob sie über den herst
 Kanal mehr anstößt als Firmware-Updates. Einschätzung: unwahrscheinlich — eine Firmware, die
 nicht einmal Schlagzeiten nach außen gibt, exportiert kaum ein EKG. Blind Kommandos auf den
 Kanal zu schreiben ist nicht ratsam (Update-Modus).
+
+Geplant für den 20.10.2026: [`runbook_app_mitschnitt.md`](runbook_app_mitschnitt.md).
 
 ## Quellen
 
