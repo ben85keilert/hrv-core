@@ -77,9 +77,9 @@ vorhandenes Sidecar wird **fortgeschrieben**, fremde Felder (praxis_gui) bleiben
 | PPG | `sensor_*_ppg.json` | `sample_rate_hz`, `kanaele`, `kanal_namen`, `werte[]`, … — nur `deid` |
 | `sitzung-v1` | `Messungen/Sitzungen/sitzung_*.json` | Mehrgeräte-Sitzung aus praxis_gui: `teilnehmer[]` mit `geraet`, `adresse` (BLE-MAC, `deid` leert), `geraet_profil`, `intervall_quelle`, `ordner`, `datei`, `n_schlaege` — nur `deid` |
 
-## Offen (D10)
+## Abgleich mit praxis_gui (D10)
 
-Die Feldreferenz in `praxis_gui/docs/sensor_hrv.md` kennt `datenqualitaet`,
-`uebungen`, `marke` und `corrections_ppi` noch nicht; die Kompatibilität ist
-gegeben (optionale, flache Felder, praxis_gui behält sie beim Bearbeiten). Der
-Nachtrag dort gehört in das praxis_gui-Repo.
+Die Feldreferenz in `praxis_gui/docs/sensor_hrv.md` nennt seit dem 19.10.2026
+(praxis_gui c3ba778) auch `datenqualitaet`, `uebungen`, `marke`, `adresse` und
+`corrections_ppi` und verweist für alles Weitere hierher. Die Kompatibilität ist
+gegeben: optionale, flache Felder, praxis_gui behält sie beim Bearbeiten.
