@@ -96,8 +96,9 @@ blieb der Rohwert stehen und zählte, sofern er innerhalb 250–2000 ms lag (ein
 Malik-Ausreißer am Rand). Beides sind erfundene Werte. Jetzt schlägt die
 Automatik für solche Ketten den Ausschluss vor, und `anwenden` behandelt
 **jede** gespeicherte Interpolation ohne zwei Anker wie `delete` — auch aus
-einem Sidecar von praxis_gui, das dort weiter ein Plateau rechnet (bewusste
-Abweichung, `docs/VERGLEICH.md`). Ben, 19.10.2026: lieber eine Lücke.
+einem älteren Sidecar von praxis_gui (dort entstand bis zum Umstieg auf
+hrv-core ein Plateau; seitdem rechnet praxis_gui über `anwenden` und folgt
+dieser Regel). Ben, 19.10.2026: lieber eine Lücke.
 
 Beim Öffnen einer Aufzeichnung sind **alle** Vorschläge übernommen. Wer eine
 Kette abwählt, entscheidet sich bewusst dafür, dass dort der Rohwert zählt.
