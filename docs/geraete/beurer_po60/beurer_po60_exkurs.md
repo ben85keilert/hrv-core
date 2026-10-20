@@ -360,7 +360,7 @@ from datetime import datetime
 # ---------------------------------------------------------------------------
 # Datenkanal: Dienst 0xFF12 mit FF01 (write) und FF02 (notify).
 DATEN_SERVICE_UUID = "0000ff12-0000-1000-8000-00805f9b34fb"
-WRITE_UUID  = "0000ff01-0000-1000-8000-00805f9b34fb"
+WRITE_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
 NOTIFY_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
 
 # Zweiter Vendor-Dienst 0xFF00 mit FF03 (read/write) — Funktion unbekannt.
@@ -369,16 +369,16 @@ FF03_UUID = "0000ff03-0000-1000-8000-00805f9b34fb"
 
 # Standard-Pulsoximeter-Dienst (PLX) — am PO60 NICHT vorhanden (bestätigt);
 # die Konstanten bleiben für die gezielte Prüfung im GATT-Dump.
-PLX_SERVICE_UUID    = "00001822-0000-1000-8000-00805f9b34fb"
+PLX_SERVICE_UUID = "00001822-0000-1000-8000-00805f9b34fb"
 PLX_SPOT_CHECK_UUID = "00002a5e-0000-1000-8000-00805f9b34fb"
 PLX_CONTINUOUS_UUID = "00002a5f-0000-1000-8000-00805f9b34fb"
 
 # Rahmenköpfe
-KOPF_SPEICHER   = 0xE9      # ein gespeicherter Messdatensatz
-KOPF_HANDSHAKE  = 0xE0      # Antwort auf CMD_HANDSHAKE
+KOPF_SPEICHER = 0xE9  # ein gespeicherter Messdatensatz
+KOPF_HANDSHAKE = 0xE0  # Antwort auf CMD_HANDSHAKE
 
-DATENSATZ_LAENGE  = 24
-HANDSHAKE_LAENGE  = 7
+DATENSATZ_LAENGE = 24
+HANDSHAKE_LAENGE = 7
 
 # Namensmuster, an denen ein PO60 im Scan erkannt wird (Gerät meldet "PO60").
 NAMENS_MUSTER = ("po60", "po 60", "beurer")
@@ -394,6 +394,7 @@ def sieht_nach_po60_aus(name: str | None) -> bool:
 # ---------------------------------------------------------------------------
 # Kommandos bauen
 # ---------------------------------------------------------------------------
+
 
 def pruefsumme(daten: bytes) -> int:
     """Prüfsumme: Summe der vorherigen Bytes, auf 7 Bit gekürzt.
@@ -425,7 +426,7 @@ def kommando_speicher_abruf(start_index: int = 0) -> bytes:
 
 # Die beiden bestätigten Kommandos. Die Tests frieren die Hex-Werte ein,
 # damit die Prüfsummenregel nie stillschweigend das Gesendete ändert.
-CMD_HANDSHAKE      = kommando(0x90, 0x05)       # 90 05 15
+CMD_HANDSHAKE = kommando(0x90, 0x05)  # 90 05 15
 CMD_SPEICHER_ABRUF = kommando_speicher_abruf(0)  # 99 00 19
 
 # Empfohlene Pause zwischen Handshake und Speicherabruf.
@@ -436,6 +437,7 @@ HANDSHAKE_PAUSE_S = 0.5
 # Rahmen
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class HandshakeAntwort:
     """Antwort auf CMD_HANDSHAKE: e0 05 <n u16 LE> <n u16 LE> <Prüfsumme>.
@@ -444,6 +446,7 @@ class HandshakeAntwort:
     überein (10 gemeldet, 10 geliefert). Warum die Zahl doppelt im Paket
     steht (Bytes 2–3 und 4–5), ist offen — vielleicht Anzahl und Kapazität.
     """
+
     anzahl_datensaetze: int
     pruefsumme_ok: bool
     roh: bytes
@@ -452,11 +455,12 @@ class HandshakeAntwort:
 @dataclass(frozen=True)
 class PO60Messung:
     """Ein gespeicherter Messdatensatz (24 Byte, dekodiert)."""
-    index: int                      # Bits 0–5 von Byte 1
-    letzter: bool                   # Bit 6 von Byte 1: letzter im Speicher
-    beginn: datetime | None         # None = unplausibel, nie eine Exception
+
+    index: int  # Bits 0–5 von Byte 1
+    letzter: bool  # Bit 6 von Byte 1: letzter im Speicher
+    beginn: datetime | None  # None = unplausibel, nie eine Exception
     ende: datetime | None
-    abtastungen: int                # Basis-128-Zahl aus Byte 14–16
+    abtastungen: int  # Basis-128-Zahl aus Byte 14–16
     spo2_max: int
     spo2_min: int
     spo2_mittel: int
@@ -480,7 +484,8 @@ class UnbekannterRahmen:
     tauchen dessen Bytes genau hier auf — sie sind der wertvollste
     Erkundungsertrag, nicht Müll.
     """
-    kopf: int | None                # erstes Byte, None bei leerem Stück
+
+    kopf: int | None  # erstes Byte, None bei leerem Stück
     laenge: int
     roh: bytes
 
@@ -522,9 +527,11 @@ def parse_datensatz(daten: bytes) -> PO60Messung | None:
         beginn=_zeitstempel(b[2:8]),
         ende=_zeitstempel(b[8:14]),
         abtastungen=_basis128(b[14:17]),
-        spo2_max=b[17] & 0x7F, spo2_min=b[18] & 0x7F,
+        spo2_max=b[17] & 0x7F,
+        spo2_min=b[18] & 0x7F,
         spo2_mittel=b[19] & 0x7F,
-        puls_max=b[20] & 0x7F, puls_min=b[21] & 0x7F,
+        puls_max=b[20] & 0x7F,
+        puls_min=b[21] & 0x7F,
         puls_mittel=b[22] & 0x7F,
         roh=b,
     )
@@ -545,6 +552,7 @@ def parse_handshake(daten: bytes) -> HandshakeAntwort | None:
 # ---------------------------------------------------------------------------
 # Datensätze aus dem Notification-Strom sammeln
 # ---------------------------------------------------------------------------
+
 
 class SpeicherSammler:
     """Setzt den fortlaufenden FF02-Bytestrom wieder zu Rahmen zusammen.
@@ -580,7 +588,7 @@ class SpeicherSammler:
             kopf = self._puffer[0]
             if kopf == KOPF_SPEICHER:
                 if len(self._puffer) < DATENSATZ_LAENGE:
-                    break                       # Rest kommt mit dem nächsten Paket
+                    break  # Rest kommt mit dem nächsten Paket
                 m = parse_datensatz(bytes(self._puffer[:DATENSATZ_LAENGE]))
                 if m is not None:
                     self._rest_abschliessen()
@@ -605,9 +613,9 @@ class SpeicherSammler:
 
     def _rest_abschliessen(self) -> None:
         if self._rest:
-            self.unbekannt.append(UnbekannterRahmen(
-                kopf=self._rest[0], laenge=len(self._rest),
-                roh=bytes(self._rest)))
+            self.unbekannt.append(
+                UnbekannterRahmen(kopf=self._rest[0], laenge=len(self._rest), roh=bytes(self._rest))
+            )
             self._rest.clear()
 
     def abschliessen(self) -> None:
@@ -668,20 +676,23 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Bewusst nur das Qt-freie Protokollmodul — kein PySide6-Import.
-from sensors.devices import po60                   # noqa: E402
+from sensors.devices import po60  # noqa: E402
 
 try:
     from bleak import BleakClient, BleakScanner
-except ImportError:                                 # pragma: no cover
-    print("bleak ist nicht installiert — bitte in der venv der Anwendung "
-          "starten (.venv/Scripts/python.exe).", file=sys.stderr)
+except ImportError:  # pragma: no cover
+    print(
+        "bleak ist nicht installiert — bitte in der venv der Anwendung "
+        "starten (.venv/Scripts/python.exe).",
+        file=sys.stderr,
+    )
     sys.exit(2)
 
 # ---------------------------------------------------------------------------
 # Konstanten
 # ---------------------------------------------------------------------------
 
-HR_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"   # Standard-HR
+HR_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"  # Standard-HR
 DEVICE_INFO_SERVICE = "0000180a-0000-1000-8000-00805f9b34fb"
 
 # Kandidatenkommandos für --sondieren: naheliegende Opcodes rund um die zwei
@@ -698,12 +709,13 @@ SONDIER_KOMMANDOS: tuple[bytes, ...] = (
 )
 
 SONDIER_ANTWORTFENSTER_S = 2.0
-SPEICHER_RUHE_S = 3.0          # so lange Stille = Speicherabruf ist fertig
+SPEICHER_RUHE_S = 3.0  # so lange Stille = Speicherabruf ist fertig
 
 
 # ---------------------------------------------------------------------------
 # JSONL-Protokoll
 # ---------------------------------------------------------------------------
+
 
 class Protokoll:
     """Eine JSONL-Datei, zeilenweise geflusht — bei einem Verbindungsabriss
@@ -715,8 +727,9 @@ class Protokoll:
         self.pfad = os.path.join(verzeichnis, name)
         self._f = open(self.pfad, "w", encoding="utf-8")
 
-    def zeile(self, art: str, quelle: str = "", roh: bytes | None = None,
-              dekodiert=None, **extra) -> None:
+    def zeile(
+        self, art: str, quelle: str = "", roh: bytes | None = None, dekodiert=None, **extra
+    ) -> None:
         eintrag = {
             "t_mono": time.monotonic(),
             "t_wall": datetime.now().astimezone().isoformat(),
@@ -729,8 +742,7 @@ class Protokoll:
         if dekodiert is not None:
             eintrag["dekodiert"] = dekodiert
         eintrag.update(extra)
-        self._f.write(json.dumps(eintrag, ensure_ascii=False,
-                                 default=str) + "\n")
+        self._f.write(json.dumps(eintrag, ensure_ascii=False, default=str) + "\n")
         self._f.flush()
 
     def schliessen(self) -> None:
@@ -754,6 +766,7 @@ def _dekodiert_dict(rahmen) -> dict:
 # Verbinden
 # ---------------------------------------------------------------------------
 
+
 def _taste_druecken_hinweis(erneut: bool = False) -> None:
     print()
     wort = "erneut kurz" if erneut else "kurz"
@@ -765,19 +778,25 @@ def _taste_druecken_hinweis(erneut: bool = False) -> None:
 
 def _adv_eintrag(dev, adv) -> dict:
     return {
-        "name": dev.name, "adresse": dev.address, "rssi": adv.rssi,
+        "name": dev.name,
+        "adresse": dev.address,
+        "rssi": adv.rssi,
         "dienste": list(adv.service_uuids or []),
-        "hersteller_daten": {str(k): bytes(v).hex()
-                             for k, v in (adv.manufacturer_data or {}).items()},
-        "service_daten": {str(k): bytes(v).hex()
-                          for k, v in (adv.service_data or {}).items()},
+        "hersteller_daten": {
+            str(k): bytes(v).hex() for k, v in (adv.manufacturer_data or {}).items()
+        },
+        "service_daten": {str(k): bytes(v).hex() for k, v in (adv.service_data or {}).items()},
         "lokaler_name": adv.local_name,
     }
 
 
-async def _live_scan(log: Protokoll, dauer: float, *,
-                     ziel_adresse: str | None = None,
-                     stopp_bei_kandidat: bool = False) -> list:
+async def _live_scan(
+    log: Protokoll,
+    dauer: float,
+    *,
+    ziel_adresse: str | None = None,
+    stopp_bei_kandidat: bool = False,
+) -> list:
     """Eine Scan-Runde mit Sofortanzeige.
 
     Der PO60 ist nur wenige Sekunden sichtbar — deshalb kein Blockscan
@@ -789,7 +808,7 @@ async def _live_scan(log: Protokoll, dauer: float, *,
 
     Rückgabe: Liste der Kandidaten als echte BLEDevice-Objekte.
     """
-    gesehen: dict[str, str | None] = {}     # Adresse → zuletzt gezeigter Name
+    gesehen: dict[str, str | None] = {}  # Adresse → zuletzt gezeigter Name
     kandidaten: dict[str, object] = {}
     treffer = asyncio.Event()
 
@@ -803,12 +822,10 @@ async def _live_scan(log: Protokoll, dauer: float, *,
         gesehen[adresse] = name
         log.zeile("gatt", quelle="scan", dekodiert=_adv_eintrag(dev, adv))
         ist_kandidat = (
-            (ziel_adresse is not None
-             and adresse.lower() == ziel_adresse.lower())
-            or po60.sieht_nach_po60_aus(name))
+            ziel_adresse is not None and adresse.lower() == ziel_adresse.lower()
+        ) or po60.sieht_nach_po60_aus(name)
         marker = "  ← PO60-Kandidat" if ist_kandidat else ""
-        print(f"  {adv.rssi or '?':>4}  {adresse}  {name or '(ohne Namen)'}"
-              f"{marker}")
+        print(f"  {adv.rssi or '?':>4}  {adresse}  {name or '(ohne Namen)'}{marker}")
         if ist_kandidat and adresse not in kandidaten:
             kandidaten[adresse] = dev
             if stopp_bei_kandidat:
@@ -826,8 +843,7 @@ async def _live_scan(log: Protokoll, dauer: float, *,
     return list(kandidaten.values())
 
 
-async def _geraet_suchen(log: Protokoll, adresse: str | None, dauer: float,
-                         runden: int | None):
+async def _geraet_suchen(log: Protokoll, adresse: str | None, dauer: float, runden: int | None):
     """In Runden scannen, bis der PO60 auftaucht (Strg+C bricht ab).
 
     `adresse` gesetzt → Suche nach genau diesem Gerät; sonst nach dem
@@ -840,12 +856,10 @@ async def _geraet_suchen(log: Protokoll, adresse: str | None, dauer: float,
         runde += 1
         _taste_druecken_hinweis(erneut=runde > 1)
         print(f"Scan-Runde {runde} ({dauer:.0f} s) — suche {ziel} …")
-        gefunden = await _live_scan(log, dauer, ziel_adresse=adresse,
-                                    stopp_bei_kandidat=True)
+        gefunden = await _live_scan(log, dauer, ziel_adresse=adresse, stopp_bei_kandidat=True)
         if gefunden:
             return gefunden[0]
-        print("  … in dieser Runde nicht gesehen — gleich folgt die "
-              "nächste (Abbruch: Strg+C).")
+        print("  … in dieser Runde nicht gesehen — gleich folgt die nächste (Abbruch: Strg+C).")
     log.zeile("fehler", meldung=f"{ziel} nach {runde} Runde(n) nicht gefunden")
     raise SystemExit(f"{ziel} nicht gefunden (Rundenlimit erreicht).")
 
@@ -866,9 +880,8 @@ async def _verbinden(geraet, log: Protokoll, *, koppeln: bool) -> BleakClient:
         trennung.set()
 
     winrt = {"use_cached_services": False} if sys.platform == "win32" else {}
-    client = BleakClient(dev, disconnected_callback=_getrennt,
-                         timeout=30.0, winrt=winrt)
-    client._po60_trennung = trennung        # fürs Warten in den Phasen
+    client = BleakClient(dev, disconnected_callback=_getrennt, timeout=30.0, winrt=winrt)
+    client._po60_trennung = trennung  # fürs Warten in den Phasen
     await client.connect()
     log.zeile("status", meldung=f"verbunden mit {dev.name} ({dev.address})")
     print(f"Verbunden: {dev.name} ({dev.address})")
@@ -878,7 +891,7 @@ async def _verbinden(geraet, log: Protokoll, *, koppeln: bool) -> BleakClient:
             ergebnis = await client.pair()
             log.zeile("status", meldung=f"pair() -> {ergebnis}")
             print(f"Kopplung: {'ok' if ergebnis else 'fehlgeschlagen'}")
-        except Exception as exc:            # Ergebnis ist selbst ein Befund
+        except Exception as exc:  # Ergebnis ist selbst ein Befund
             log.zeile("fehler", meldung=f"pair() fehlgeschlagen: {exc}")
             print(f"Kopplung fehlgeschlagen: {exc}")
 
@@ -887,9 +900,18 @@ async def _verbinden(geraet, log: Protokoll, *, koppeln: bool) -> BleakClient:
 
 def _ist_zugriffsfehler(exc: Exception) -> bool:
     text = str(exc).lower()
-    return any(s in text for s in ("access", "denied", "authentication",
-                                   "encryption", "authorization", "att error",
-                                   "insufficient"))
+    return any(
+        s in text
+        for s in (
+            "access",
+            "denied",
+            "authentication",
+            "encryption",
+            "authorization",
+            "att error",
+            "insufficient",
+        )
+    )
 
 
 def _pairing_hinweis() -> None:
@@ -907,6 +929,7 @@ def _pairing_hinweis() -> None:
 # Phase: GATT-Dump
 # ---------------------------------------------------------------------------
 
+
 async def phase_dienste(client: BleakClient, log: Protokoll) -> None:
     print("\n— GATT-Tabelle —")
     hat = {"ff01": False, "ff02": False, "plx": False, "hr": False}
@@ -922,13 +945,17 @@ async def phase_dienste(client: BleakClient, log: Protokoll) -> None:
             print(f"   {ch.uuid}  [{props}]  {ch.description or ''}")
             deskriptoren = []
             for d in ch.descriptors:
-                deskriptoren.append({"uuid": str(d.uuid),
-                                     "beschreibung": d.description})
-            log.zeile("gatt", quelle=c_uuid, dekodiert={
-                "dienst": s_uuid, "properties": list(ch.properties),
-                "beschreibung": ch.description,
-                "deskriptoren": deskriptoren,
-            })
+                deskriptoren.append({"uuid": str(d.uuid), "beschreibung": d.description})
+            log.zeile(
+                "gatt",
+                quelle=c_uuid,
+                dekodiert={
+                    "dienst": s_uuid,
+                    "properties": list(ch.properties),
+                    "beschreibung": ch.description,
+                    "deskriptoren": deskriptoren,
+                },
+            )
             if c_uuid == po60.WRITE_UUID:
                 hat["ff01"] = True
             if c_uuid == po60.NOTIFY_UUID:
@@ -939,19 +966,19 @@ async def phase_dienste(client: BleakClient, log: Protokoll) -> None:
             # Modell, Firmware sind fürs Befund-Dokument Gold wert. Die
             # drei Vendor-Characteristics sind ebenfalls lesbar; besonders
             # FF03 (Funktion unbekannt) kann so etwas verraten.
-            lesenswert = (s_uuid == DEVICE_INFO_SERVICE
-                          or c_uuid in (po60.WRITE_UUID, po60.NOTIFY_UUID,
-                                        po60.FF03_UUID))
+            lesenswert = s_uuid == DEVICE_INFO_SERVICE or c_uuid in (
+                po60.WRITE_UUID,
+                po60.NOTIFY_UUID,
+                po60.FF03_UUID,
+            )
             if lesenswert and "read" in ch.properties:
                 try:
                     wert = await client.read_gatt_char(ch)
                     text = wert.decode("utf-8", errors="replace").strip("\x00")
                     print(f"      = {bytes(wert).hex()}  ({text!r})")
-                    log.zeile("gatt", quelle=c_uuid, roh=wert,
-                              dekodiert={"text": text})
+                    log.zeile("gatt", quelle=c_uuid, roh=wert, dekodiert={"text": text})
                 except Exception as exc:
-                    log.zeile("fehler", quelle=c_uuid,
-                              meldung=f"Lesen fehlgeschlagen: {exc}")
+                    log.zeile("fehler", quelle=c_uuid, meldung=f"Lesen fehlgeschlagen: {exc}")
 
     print("\nBefund:")
     print(f"  Proprietär FF01 (Write):  {'ja' if hat['ff01'] else 'NEIN'}")
@@ -965,27 +992,31 @@ async def phase_dienste(client: BleakClient, log: Protokoll) -> None:
 # Phase: Speicherabruf
 # ---------------------------------------------------------------------------
 
-async def phase_speicher(client: BleakClient, log: Protokoll,
-                         pause: float) -> bool:
+
+async def phase_speicher(client: BleakClient, log: Protokoll, pause: float) -> bool:
     print("\n— Speicherabruf —")
-    print("Hinweis: Nach dem Abruf trennt der PO60 die Verbindung von "
-          "selbst — das ist normal.")
+    print("Hinweis: Nach dem Abruf trennt der PO60 die Verbindung von selbst — das ist normal.")
     sammler = po60.SpeicherSammler()
     letzte_notification = [time.monotonic()]
 
     def _empfang(_ch, daten: bytearray) -> None:
         letzte_notification[0] = time.monotonic()
         fertig = sammler.aufnehmen(bytes(daten))
-        log.zeile("notify", quelle="ff02", roh=bytes(daten),
-                  dekodiert=[_dekodiert_dict(r) for r in fertig] or None)
+        log.zeile(
+            "notify",
+            quelle="ff02",
+            roh=bytes(daten),
+            dekodiert=[_dekodiert_dict(r) for r in fertig] or None,
+        )
         for r in fertig:
             if isinstance(r, po60.HandshakeAntwort):
-                print(f"  Gerät meldet {r.anzahl_datensaetze} gespeicherte "
-                      f"Datensätze (Prüfsumme "
-                      f"{'ok' if r.pruefsumme_ok else 'FALSCH'})")
+                print(
+                    f"  Gerät meldet {r.anzahl_datensaetze} gespeicherte "
+                    f"Datensätze (Prüfsumme "
+                    f"{'ok' if r.pruefsumme_ok else 'FALSCH'})"
+                )
             elif isinstance(r, po60.PO60Messung):
-                print(f"  Datensatz {r.index}"
-                      f"{' (letzter)' if r.letzter else ''} dekodiert")
+                print(f"  Datensatz {r.index}{' (letzter)' if r.letzter else ''} dekodiert")
 
     try:
         await client.start_notify(po60.NOTIFY_UUID, _empfang)
@@ -997,8 +1028,7 @@ async def phase_speicher(client: BleakClient, log: Protokoll,
         return False
 
     async def _schreiben(cmd: bytes, **log_extra) -> None:
-        log.zeile("write", quelle="ff01", roh=cmd,
-                  dekodiert=log_extra or None)
+        log.zeile("write", quelle="ff01", roh=cmd, dekodiert=log_extra or None)
         print(f"  > schreibe {cmd.hex()}")
         await client.write_gatt_char(po60.WRITE_UUID, cmd, response=False)
 
@@ -1034,8 +1064,7 @@ async def phase_speicher(client: BleakClient, log: Protokoll,
     fortsetzungen = 0
     fallback_benutzt = False
     while not client._po60_trennung.is_set():
-        gemeldet_bisher = (sammler.handshakes[0].anzahl_datensaetze
-                           if sammler.handshakes else None)
+        gemeldet_bisher = sammler.handshakes[0].anzahl_datensaetze if sammler.handshakes else None
         bekannt = _eindeutig()
         if gemeldet_bisher is None or len(bekannt) >= gemeldet_bisher:
             break
@@ -1044,8 +1073,7 @@ async def phase_speicher(client: BleakClient, log: Protokoll,
         vorher = len(bekannt)
         if fortsetzungen < 32:
             fortsetzungen += 1
-            await _schreiben(po60.kommando_speicher_abruf(vorher),
-                             fortsetzung=vorher)
+            await _schreiben(po60.kommando_speicher_abruf(vorher), fortsetzung=vorher)
         elif not fallback_benutzt:
             fallback_benutzt = True
             await _schreiben(po60.CMD_SPEICHER_ABRUF, fallback=True)
@@ -1066,30 +1094,36 @@ async def phase_speicher(client: BleakClient, log: Protokoll,
     except Exception:
         pass
 
-    gemeldet = (sammler.handshakes[0].anzahl_datensaetze
-                if sammler.handshakes else None)
+    gemeldet = sammler.handshakes[0].anzahl_datensaetze if sammler.handshakes else None
     messungen = list(_eindeutig().values())
-    print(f"\nErgebnis: {len(messungen)} Datensätze dekodiert"
-          + (f" (Gerät meldete {gemeldet})" if gemeldet is not None else "")
-          + (f", {fortsetzungen} Fortsetzungsanforderung(en)"
-             if fortsetzungen else "")
-          + f", {len(sammler.unbekannt)} unbekannte Reststücke (siehe Log)")
+    print(
+        f"\nErgebnis: {len(messungen)} Datensätze dekodiert"
+        + (f" (Gerät meldete {gemeldet})" if gemeldet is not None else "")
+        + (f", {fortsetzungen} Fortsetzungsanforderung(en)" if fortsetzungen else "")
+        + f", {len(sammler.unbekannt)} unbekannte Reststücke (siehe Log)"
+    )
     if messungen:
-        print(f"  {'Beginn':<20} {'Ende':<9} {'Dauer':>6}  "
-              f"{'SpO2 min/max/Ø':<15} Puls min/max/Ø")
+        print(f"  {'Beginn':<20} {'Ende':<9} {'Dauer':>6}  {'SpO2 min/max/Ø':<15} Puls min/max/Ø")
         for m in messungen:
-            beginn = m.beginn.strftime("%d.%m.%Y %H:%M:%S") \
-                if m.beginn else "(unlesbar)"
+            beginn = m.beginn.strftime("%d.%m.%Y %H:%M:%S") if m.beginn else "(unlesbar)"
             ende = m.ende.strftime("%H:%M:%S") if m.ende else "?"
             dauer = f"{m.dauer_s:.0f} s" if m.dauer_s is not None else "?"
-            print(f"  {beginn:<20} {ende:<9} {dauer:>6}  "
-                  f"{m.spo2_min:>3}/{m.spo2_max:>3}/{m.spo2_mittel:>3}      "
-                  f"{m.puls_min:>3}/{m.puls_max:>3}/{m.puls_mittel:>3}")
-    log.zeile("status", dekodiert={
-        "befund_speicher": {"datensaetze": len(messungen),
-                            "gemeldet": gemeldet,
-                            "fortsetzungen": fortsetzungen,
-                            "unbekannt": len(sammler.unbekannt)}})
+            print(
+                f"  {beginn:<20} {ende:<9} {dauer:>6}  "
+                f"{m.spo2_min:>3}/{m.spo2_max:>3}/{m.spo2_mittel:>3}      "
+                f"{m.puls_min:>3}/{m.puls_max:>3}/{m.puls_mittel:>3}"
+            )
+    log.zeile(
+        "status",
+        dekodiert={
+            "befund_speicher": {
+                "datensaetze": len(messungen),
+                "gemeldet": gemeldet,
+                "fortsetzungen": fortsetzungen,
+                "unbekannt": len(sammler.unbekannt),
+            }
+        },
+    )
     # Vollständig, wenn die Anzahl zur Gerätemeldung passt (oder das Gerät
     # gar nichts meldete und wenigstens der Ablauf ungestört durchlief).
     if gemeldet is not None:
@@ -1101,8 +1135,10 @@ async def phase_speicher(client: BleakClient, log: Protokoll,
 # Phase: Lauschen (Live-Modus-Detektion)
 # ---------------------------------------------------------------------------
 
-async def phase_lauschen(client: BleakClient, log: Protokoll, minuten: float,
-                         sondieren: bool, keepalive_s: float) -> bool:
+
+async def phase_lauschen(
+    client: BleakClient, log: Protokoll, minuten: float, sondieren: bool, keepalive_s: float
+) -> bool:
     print(f"\n— Lauschen ({minuten:g} min) —")
     print("»  Finger jetzt in den PO60 einlegen und am besten eine ganze")
     print("»  Messung durchlaufen lassen. Jede spontan eintreffende")
@@ -1122,19 +1158,26 @@ async def phase_lauschen(client: BleakClient, log: Protokoll, minuten: float,
         def _cb(_ch, daten: bytearray) -> None:
             zaehler["gesamt"] += 1
             fertig = sammler_je_uuid[uuid].aufnehmen(bytes(daten))
-            log.zeile("notify", quelle=uuid, roh=bytes(daten),
-                      dekodiert=[_dekodiert_dict(r) for r in fertig] or None)
-            print(f"  [{uuid[:8]}] {bytes(daten).hex()}"
-                  + (f"  → {', '.join(type(r).__name__ for r in fertig)}"
-                     if fertig else ""))
+            log.zeile(
+                "notify",
+                quelle=uuid,
+                roh=bytes(daten),
+                dekodiert=[_dekodiert_dict(r) for r in fertig] or None,
+            )
+            print(
+                f"  [{uuid[:8]}] {bytes(daten).hex()}"
+                + (f"  → {', '.join(type(r).__name__ for r in fertig)}" if fertig else "")
+            )
             for r in fertig:
                 if isinstance(r, po60.HandshakeAntwort):
-                    if (letzte_anzahl[0] is not None
-                            and r.anzahl_datensaetze != letzte_anzahl[0]):
-                        print(f"  ★ Datensatzanzahl geändert: "
-                              f"{letzte_anzahl[0]} → {r.anzahl_datensaetze} "
-                              f"— eine Messung wurde gespeichert!")
+                    if letzte_anzahl[0] is not None and r.anzahl_datensaetze != letzte_anzahl[0]:
+                        print(
+                            f"  ★ Datensatzanzahl geändert: "
+                            f"{letzte_anzahl[0]} → {r.anzahl_datensaetze} "
+                            f"— eine Messung wurde gespeichert!"
+                        )
                     letzte_anzahl[0] = r.anzahl_datensaetze
+
         return _cb
 
     # FF02 plus jede weitere notify-fähige Characteristic abonnieren — das
@@ -1148,8 +1191,7 @@ async def phase_lauschen(client: BleakClient, log: Protokoll, minuten: float,
                     await client.start_notify(ch, _empfang_fuer(str(ch.uuid)))
                     abonniert.append(str(ch.uuid))
                 except Exception as exc:
-                    log.zeile("fehler", quelle=str(ch.uuid),
-                              meldung=f"start_notify: {exc}")
+                    log.zeile("fehler", quelle=str(ch.uuid), meldung=f"start_notify: {exc}")
     print(f"Abonniert: {', '.join(abonniert) or 'nichts (!)'}")
     log.zeile("status", dekodiert={"lauschen_abonniert": abonniert})
 
@@ -1158,12 +1200,10 @@ async def phase_lauschen(client: BleakClient, log: Protokoll, minuten: float,
         for cmd in SONDIER_KOMMANDOS:
             if client._po60_trennung.is_set():
                 break
-            log.zeile("write", quelle="ff01", roh=cmd,
-                      dekodiert={"sondierung": True})
+            log.zeile("write", quelle="ff01", roh=cmd, dekodiert={"sondierung": True})
             print(f"  > sondiere {cmd.hex()}")
             try:
-                await client.write_gatt_char(po60.WRITE_UUID, cmd,
-                                             response=False)
+                await client.write_gatt_char(po60.WRITE_UUID, cmd, response=False)
             except Exception as exc:
                 log.zeile("fehler", meldung=f"Sondierung {cmd.hex()}: {exc}")
             await asyncio.sleep(SONDIER_ANTWORTFENSTER_S)
@@ -1177,17 +1217,21 @@ async def phase_lauschen(client: BleakClient, log: Protokoll, minuten: float,
     try:
         while time.monotonic() < ende:
             if client._po60_trennung.is_set():
-                print("Gerät hat getrennt — Lauschphase endet. (Wann das "
-                      "passiert, ist selbst ein Befund — steht im Log.)")
+                print(
+                    "Gerät hat getrennt — Lauschphase endet. (Wann das "
+                    "passiert, ist selbst ein Befund — steht im Log.)"
+                )
                 durchgehalten = False
                 break
             if keepalive_s > 0 and time.monotonic() >= naechster_keepalive:
                 naechster_keepalive += keepalive_s
-                log.zeile("write", quelle="ff01", roh=po60.CMD_HANDSHAKE,
-                          dekodiert={"keepalive": True})
+                log.zeile(
+                    "write", quelle="ff01", roh=po60.CMD_HANDSHAKE, dekodiert={"keepalive": True}
+                )
                 try:
                     await client.write_gatt_char(
-                        po60.WRITE_UUID, po60.CMD_HANDSHAKE, response=False)
+                        po60.WRITE_UUID, po60.CMD_HANDSHAKE, response=False
+                    )
                 except Exception as exc:
                     log.zeile("fehler", meldung=f"Keep-Alive: {exc}")
             await asyncio.sleep(0.5)
@@ -1199,14 +1243,20 @@ async def phase_lauschen(client: BleakClient, log: Protokoll, minuten: float,
                 pass
 
     print(f"Lauschen beendet: {zaehler['gesamt']} Notification(s) empfangen.")
-    log.zeile("status", dekodiert={"lauschen_empfangen": zaehler["gesamt"],
-                                   "lauschen_durchgehalten": durchgehalten})
+    log.zeile(
+        "status",
+        dekodiert={
+            "lauschen_empfangen": zaehler["gesamt"],
+            "lauschen_durchgehalten": durchgehalten,
+        },
+    )
     return durchgehalten
 
 
 # ---------------------------------------------------------------------------
 # Subkommandos
 # ---------------------------------------------------------------------------
+
 
 async def _mit_verbindung(args, log: Protokoll, phasen) -> None:
     """Phasen nacheinander ausführen; bricht die Verbindung ab (der PO60
@@ -1216,8 +1266,7 @@ async def _mit_verbindung(args, log: Protokoll, phasen) -> None:
 
     async def _neu_verbinden():
         nonlocal client
-        geraet = await _geraet_suchen(log, args.adresse, args.dauer,
-                                      args.runden)
+        geraet = await _geraet_suchen(log, args.adresse, args.dauer, args.runden)
         client = await _verbinden(geraet, log, koppeln=args.koppeln)
 
     await _neu_verbinden()
@@ -1226,8 +1275,7 @@ async def _mit_verbindung(args, log: Protokoll, phasen) -> None:
         wiederholt: set[int] = set()
         while i < len(phasen):
             if client._po60_trennung.is_set():
-                print("\nVerbindung ist weg — der PO60 muss neu geweckt "
-                      "werden.")
+                print("\nVerbindung ist weg — der PO60 muss neu geweckt werden.")
                 log.zeile("status", meldung="Wiederverbindung wird versucht")
                 try:
                     await client.disconnect()
@@ -1235,9 +1283,8 @@ async def _mit_verbindung(args, log: Protokoll, phasen) -> None:
                     pass
                 await _neu_verbinden()
             vollstaendig = await phasen[i](client)
-            if (vollstaendig is False and client._po60_trennung.is_set()
-                    and i not in wiederholt):
-                wiederholt.add(i)       # unterbrochene Phase einmal wiederholen
+            if vollstaendig is False and client._po60_trennung.is_set() and i not in wiederholt:
+                wiederholt.add(i)  # unterbrochene Phase einmal wiederholen
                 continue
             i += 1
     except Exception as exc:
@@ -1258,11 +1305,12 @@ async def cmd_scan(args, log: Protokoll) -> None:
     print(f"Scanne {args.dauer:.0f} s (live) …")
     kandidaten = await _live_scan(log, args.dauer)
     if kandidaten:
-        print(f"\n{len(kandidaten)} PO60-Kandidat(en): "
-              + ", ".join(d.address for d in kandidaten))
+        print(f"\n{len(kandidaten)} PO60-Kandidat(en): " + ", ".join(d.address for d in kandidaten))
     else:
-        print("\nKein Gerät mit PO60-typischem Namen gesehen. Falls die "
-              "Adresse bekannt ist: nächsten Schritt mit --adresse aufrufen.")
+        print(
+            "\nKein Gerät mit PO60-typischem Namen gesehen. Falls die "
+            "Adresse bekannt ist: nächsten Schritt mit --adresse aufrufen."
+        )
 
 
 async def cmd_dienste(args, log: Protokoll) -> None:
@@ -1270,117 +1318,159 @@ async def cmd_dienste(args, log: Protokoll) -> None:
 
 
 async def cmd_speicher(args, log: Protokoll) -> None:
-    await _mit_verbindung(args, log, [
-        lambda c: phase_speicher(c, log, args.pause)])
+    await _mit_verbindung(args, log, [lambda c: phase_speicher(c, log, args.pause)])
 
 
 async def cmd_lauschen(args, log: Protokoll) -> None:
-    await _mit_verbindung(args, log, [
-        lambda c: phase_lauschen(c, log, args.minuten, args.sondieren,
-                                 args.keepalive)])
+    await _mit_verbindung(
+        args, log, [lambda c: phase_lauschen(c, log, args.minuten, args.sondieren, args.keepalive)]
+    )
 
 
 async def cmd_alles(args, log: Protokoll) -> None:
     # Lauschen VOR dem Speicherabruf: der Abruf provoziert die
     # Selbsttrennung des Geräts (Befund Lauf 2) — danach ist keine
     # Live-Modus-Erkundung mehr möglich.
-    await _mit_verbindung(args, log, [
-        lambda c: phase_dienste(c, log),
-        lambda c: phase_lauschen(c, log, args.minuten, args.sondieren,
-                                 args.keepalive),
-        lambda c: phase_speicher(c, log, args.pause),
-    ])
+    await _mit_verbindung(
+        args,
+        log,
+        [
+            lambda c: phase_dienste(c, log),
+            lambda c: phase_lauschen(c, log, args.minuten, args.sondieren, args.keepalive),
+            lambda c: phase_speicher(c, log, args.pause),
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
+
 def main(argv=None) -> int:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser(
         description="Beurer PO60 erkunden: GATT-Dump, Speicherabruf, "
-                    "Live-Modus-Detektion. Alles landet roh in einer "
-                    "JSONL-Datei.")
-    ap.add_argument("--log-verzeichnis",
-                    default=os.path.join(repo_root, "Logs", "po60"),
-                    help="Ablage der JSONL-Protokolle "
-                         "(Vorgabe: Logs/po60/, git-ignoriert)")
+        "Live-Modus-Detektion. Alles landet roh in einer "
+        "JSONL-Datei."
+    )
+    ap.add_argument(
+        "--log-verzeichnis",
+        default=os.path.join(repo_root, "Logs", "po60"),
+        help="Ablage der JSONL-Protokolle (Vorgabe: Logs/po60/, git-ignoriert)",
+    )
     sub = ap.add_subparsers(dest="befehl", required=True)
 
     def _mit_geraet(p):
-        p.add_argument("--adresse", required=True,
-                       help="Bluetooth-Adresse des PO60 (siehe scan)")
-        p.add_argument("--koppeln", action="store_true",
-                       help="nach dem Verbinden eine Kopplung versuchen "
-                            "(bei Zugriffsfehlern nötig)")
-        p.add_argument("--dauer", type=float, default=20.0,
-                       help="Dauer einer Scan-Runde in Sekunden (Vorgabe: 20)")
-        p.add_argument("--runden", type=int, default=None,
-                       help="Obergrenze der Scan-Runden "
-                            "(Vorgabe: unbegrenzt, Abbruch mit Strg+C)")
+        p.add_argument("--adresse", required=True, help="Bluetooth-Adresse des PO60 (siehe scan)")
+        p.add_argument(
+            "--koppeln",
+            action="store_true",
+            help="nach dem Verbinden eine Kopplung versuchen (bei Zugriffsfehlern nötig)",
+        )
+        p.add_argument(
+            "--dauer",
+            type=float,
+            default=20.0,
+            help="Dauer einer Scan-Runde in Sekunden (Vorgabe: 20)",
+        )
+        p.add_argument(
+            "--runden",
+            type=int,
+            default=None,
+            help="Obergrenze der Scan-Runden (Vorgabe: unbegrenzt, Abbruch mit Strg+C)",
+        )
 
-    p = sub.add_parser("scan", help="Umgebung live scannen, PO60-Kandidaten "
-                                    "sofort zeigen")
-    p.add_argument("--dauer", type=float, default=20.0,
-                   help="Scandauer in Sekunden (Vorgabe: 20)")
+    p = sub.add_parser("scan", help="Umgebung live scannen, PO60-Kandidaten sofort zeigen")
+    p.add_argument("--dauer", type=float, default=20.0, help="Scandauer in Sekunden (Vorgabe: 20)")
 
     p = sub.add_parser("dienste", help="GATT-Tabelle des Geräts dumpen")
     _mit_geraet(p)
 
     p = sub.add_parser("speicher", help="Gespeicherte Messungen abrufen")
     _mit_geraet(p)
-    p.add_argument("--pause", type=float, default=po60.HANDSHAKE_PAUSE_S,
-                   help="Pause zwischen Handshake und Abruf (Vorgabe: 0,5 s)")
+    p.add_argument(
+        "--pause",
+        type=float,
+        default=po60.HANDSHAKE_PAUSE_S,
+        help="Pause zwischen Handshake und Abruf (Vorgabe: 0,5 s)",
+    )
 
-    p = sub.add_parser("lauschen",
-                       help="Verbunden bleiben und spontane Pakete "
-                            "protokollieren (Live-Modus-Detektion)")
+    p = sub.add_parser(
+        "lauschen",
+        help="Verbunden bleiben und spontane Pakete protokollieren (Live-Modus-Detektion)",
+    )
     _mit_geraet(p)
-    p.add_argument("--minuten", type=float, default=5.0,
-                   help="Lauschdauer (Vorgabe: 5 min)")
-    p.add_argument("--sondieren", action="store_true",
-                   help="zusätzlich spekulative Kandidatenkommandos senden "
-                        "(Vorgabe: aus)")
-    p.add_argument("--keepalive", type=float, default=15.0,
-                   help="Keep-Alive-Handshake alle N Sekunden — der PO60 "
-                        "trennt untätige Verbindungen nach ~35 s "
-                        "(Vorgabe: 15; 0 = aus)")
+    p.add_argument("--minuten", type=float, default=5.0, help="Lauschdauer (Vorgabe: 5 min)")
+    p.add_argument(
+        "--sondieren",
+        action="store_true",
+        help="zusätzlich spekulative Kandidatenkommandos senden (Vorgabe: aus)",
+    )
+    p.add_argument(
+        "--keepalive",
+        type=float,
+        default=15.0,
+        help="Keep-Alive-Handshake alle N Sekunden — der PO60 "
+        "trennt untätige Verbindungen nach ~35 s "
+        "(Vorgabe: 15; 0 = aus)",
+    )
 
-    p = sub.add_parser("alles",
-                       help="Suchen → GATT-Dump → Lauschen → Speicherabruf "
-                            "in einem Durchgang (Standard am Gerät; der "
-                            "Speicherabruf kommt zuletzt, weil das Gerät "
-                            "danach selbst trennt)")
-    p.add_argument("--adresse", default=None,
-                   help="bekannte Adresse des PO60 (empfohlen); ohne Angabe "
-                        "wird über den Gerätenamen gesucht")
-    p.add_argument("--koppeln", action="store_true",
-                   help="nach dem Verbinden eine Kopplung versuchen")
-    p.add_argument("--dauer", type=float, default=20.0,
-                   help="Dauer einer Scan-Runde (s, Vorgabe: 20)")
-    p.add_argument("--runden", type=int, default=None,
-                   help="Obergrenze der Scan-Runden (Vorgabe: unbegrenzt)")
-    p.add_argument("--pause", type=float, default=po60.HANDSHAKE_PAUSE_S,
-                   help="Pause zwischen Handshake und Abruf")
+    p = sub.add_parser(
+        "alles",
+        help="Suchen → GATT-Dump → Lauschen → Speicherabruf "
+        "in einem Durchgang (Standard am Gerät; der "
+        "Speicherabruf kommt zuletzt, weil das Gerät "
+        "danach selbst trennt)",
+    )
+    p.add_argument(
+        "--adresse",
+        default=None,
+        help="bekannte Adresse des PO60 (empfohlen); ohne Angabe wird über den Gerätenamen gesucht",
+    )
+    p.add_argument(
+        "--koppeln", action="store_true", help="nach dem Verbinden eine Kopplung versuchen"
+    )
+    p.add_argument(
+        "--dauer", type=float, default=20.0, help="Dauer einer Scan-Runde (s, Vorgabe: 20)"
+    )
+    p.add_argument(
+        "--runden", type=int, default=None, help="Obergrenze der Scan-Runden (Vorgabe: unbegrenzt)"
+    )
+    p.add_argument(
+        "--pause",
+        type=float,
+        default=po60.HANDSHAKE_PAUSE_S,
+        help="Pause zwischen Handshake und Abruf",
+    )
     p.add_argument("--minuten", type=float, default=5.0, help="Lauschdauer")
-    p.add_argument("--sondieren", action="store_true",
-                   help="spekulative Kandidatenkommandos senden")
-    p.add_argument("--keepalive", type=float, default=15.0,
-                   help="Keep-Alive-Handshake alle N Sekunden in der "
-                        "Lauschphase (Vorgabe: 15; 0 = aus)")
+    p.add_argument(
+        "--sondieren", action="store_true", help="spekulative Kandidatenkommandos senden"
+    )
+    p.add_argument(
+        "--keepalive",
+        type=float,
+        default=15.0,
+        help="Keep-Alive-Handshake alle N Sekunden in der Lauschphase (Vorgabe: 15; 0 = aus)",
+    )
 
     args = ap.parse_args(argv)
 
     log = Protokoll(args.log_verzeichnis)
     print(f"Protokoll: {log.pfad}")
-    log.zeile("status", meldung=f"Start: {args.befehl}",
-              dekodiert={k: v for k, v in vars(args).items()
-                         if k not in ("befehl",)})
+    log.zeile(
+        "status",
+        meldung=f"Start: {args.befehl}",
+        dekodiert={k: v for k, v in vars(args).items() if k not in ("befehl",)},
+    )
 
-    laeufer = {"scan": cmd_scan, "dienste": cmd_dienste,
-               "speicher": cmd_speicher, "lauschen": cmd_lauschen,
-               "alles": cmd_alles}[args.befehl]
+    laeufer = {
+        "scan": cmd_scan,
+        "dienste": cmd_dienste,
+        "speicher": cmd_speicher,
+        "lauschen": cmd_lauschen,
+        "alles": cmd_alles,
+    }[args.befehl]
     try:
         asyncio.run(laeufer(args, log))
     except KeyboardInterrupt:
@@ -1436,7 +1526,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sensors.devices import po60                   # noqa: E402
+from sensors.devices import po60  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -1474,6 +1564,7 @@ def _sammler_mit_geraetestrom() -> po60.SpeicherSammler:
 # Kommandos
 # ---------------------------------------------------------------------------
 
+
 def test_kommandos_sind_byteweise_eingefroren():
     """Die beiden bestätigten Kommandos dürfen sich nie still ändern.
 
@@ -1503,6 +1594,7 @@ def test_speicher_abruf_mit_start_index():
 # Namens-Heuristik
 # ---------------------------------------------------------------------------
 
+
 def test_namens_heuristik():
     for name in ("PO60", "po60", "PO 60", "Beurer PO60", "beurer po 60"):
         assert po60.sieht_nach_po60_aus(name)
@@ -1513,6 +1605,7 @@ def test_namens_heuristik():
 # ---------------------------------------------------------------------------
 # Handshake-Antwort
 # ---------------------------------------------------------------------------
+
 
 def test_handshake_antwort_vom_geraet():
     h = po60.parse_handshake(bytes.fromhex(GERAETE_HANDSHAKE))
@@ -1532,6 +1625,7 @@ def test_handshake_falsche_laenge_oder_kopf_ergibt_none():
 # Datensatz-Parser am echten Strom
 # ---------------------------------------------------------------------------
 
+
 def test_geraetestrom_liefert_alle_zehn_datensaetze():
     s = _sammler_mit_geraetestrom()
     assert len(s.messungen) == 10
@@ -1550,7 +1644,7 @@ def test_geraetestrom_stichprobe_datensatz_0():
     assert (m.spo2_max, m.spo2_min, m.spo2_mittel) == (97, 97, 97)
     assert (m.puls_max, m.puls_min, m.puls_mittel) == (74, 68, 72)
     assert m.dauer_s == 48.0
-    assert m.abtastungen == 49          # Dauer + 1 (1 Hz, Endpunkte inkl.)
+    assert m.abtastungen == 49  # Dauer + 1 (1 Hz, Endpunkte inkl.)
 
 
 def test_geraetestrom_stichprobe_datensatz_5():
@@ -1577,13 +1671,22 @@ def test_letzter_flag_wandert_mit_dem_speicherstand():
     Inhaltsbestandteil — beide Varianten müssen identische Werte liefern."""
     mit_flag = _sammler_mit_geraetestrom().messungen[9]
 
-    ohne_flag_hex = ("e9091a080e063b361a080e07000000000762626239393928")
+    ohne_flag_hex = "e9091a080e063b361a080e07000000000762626239393928"
     ohne_flag = po60.parse_datensatz(bytes.fromhex(ohne_flag_hex))
     assert ohne_flag is not None
     assert not ohne_flag.letzter and mit_flag.letzter
-    for feld in ("index", "beginn", "ende", "abtastungen",
-                 "spo2_max", "spo2_min", "spo2_mittel",
-                 "puls_max", "puls_min", "puls_mittel"):
+    for feld in (
+        "index",
+        "beginn",
+        "ende",
+        "abtastungen",
+        "spo2_max",
+        "spo2_min",
+        "spo2_mittel",
+        "puls_max",
+        "puls_min",
+        "puls_mittel",
+    ):
         assert getattr(ohne_flag, feld) == getattr(mit_flag, feld)
 
 
@@ -1601,6 +1704,7 @@ def test_handshake_mitten_im_strom_wird_erkannt():
 # ---------------------------------------------------------------------------
 # Ränder und Störungen (synthetisch)
 # ---------------------------------------------------------------------------
+
 
 def _datensatz(index=0, letzter=False) -> bytes:
     """Einen gültigen 24-Byte-Datensatz bauen (Prüfsumme berechnet)."""
@@ -1640,8 +1744,7 @@ def test_kaputte_pruefsumme_wird_nicht_zum_datensatz():
 
 def test_muell_zwischen_datensaetzen_bleibt_erhalten():
     s = po60.SpeicherSammler()
-    s.aufnehmen(b"\xaa\xbb" + _datensatz(index=1) + b"\xcc"
-                + _datensatz(index=2, letzter=True))
+    s.aufnehmen(b"\xaa\xbb" + _datensatz(index=1) + b"\xcc" + _datensatz(index=2, letzter=True))
     s.abschliessen()
     assert [m.index for m in s.messungen] == [1, 2]
     assert s.messungen[1].letzter
@@ -1662,18 +1765,18 @@ def test_e9_in_nutzdaten_verschiebt_die_suche_nur_um_ein_byte():
 def test_leerer_und_kaputter_zeitstempel():
     assert po60.parse_datensatz(b"") is None
     kaputt = bytearray(_datensatz())
-    kaputt[3] = 13                                  # Monat 13
+    kaputt[3] = 13  # Monat 13
     kaputt[23] = po60.pruefsumme(bytes(kaputt[:23]))
     m = po60.parse_datensatz(bytes(kaputt))
     assert m is not None
-    assert m.beginn is None                         # None statt Exception
+    assert m.beginn is None  # None statt Exception
     assert m.dauer_s is None
 
 
 def test_unvollstaendiger_datensatz_wird_beim_abschliessen_rest():
     s = po60.SpeicherSammler()
     s.aufnehmen(_datensatz()[:10])
-    assert not s.messungen and not s.unbekannt      # wartet noch auf Bytes
+    assert not s.messungen and not s.unbekannt  # wartet noch auf Bytes
     s.abschliessen()
     assert len(s.unbekannt) == 1
     assert s.unbekannt[0].laenge == 10
@@ -1683,10 +1786,12 @@ def test_unvollstaendiger_datensatz_wird_beim_abschliessen_rest():
 # Abhängigkeiten
 # ---------------------------------------------------------------------------
 
+
 def test_importiert_ohne_bleak_und_ohne_pyside():
     """Das Modul ist reines Python — Voraussetzung dafür, dass es später
     unverändert unter ein Geräteprofil wandern kann (Muster `pmd.py`)."""
     import inspect
+
     quelle = inspect.getsource(po60)
     assert "import bleak" not in quelle
     assert "PySide6" not in quelle
@@ -1726,10 +1831,8 @@ Folgender Code kommt zum Stand aus §9.2 hinzu:
 # durchprobieren. BEWUSST nur diese eine, als read-only bekannte
 # Kommandofamilie (0x90 05 ist der harmlose Handshake) — keine fremden
 # Opcodes, die löschen/schreiben/zurücksetzen könnten.
-POLL_KOMMANDOS: tuple[bytes, ...] = tuple(
-    po60.kommando(0x90, n) for n in range(0x10)
-)
-POLL_ANTWORTFENSTER_S = 0.8    # Wartezeit auf eine Antwort nach dem Senden
+POLL_KOMMANDOS: tuple[bytes, ...] = tuple(po60.kommando(0x90, n) for n in range(0x10))
+POLL_ANTWORTFENSTER_S = 0.8  # Wartezeit auf eine Antwort nach dem Senden
 ```
 
 **Phase und Hilfsfunktion** (vor dem Abschnitt „Subkommandos"):
@@ -1743,21 +1846,20 @@ def _aenderungen(neu: bytes, alt) -> list:
     """
     if alt is None:
         return []
-    return [f"[{i}] {alt[i]}→{neu[i]}"
-            for i in range(min(len(neu), len(alt))) if neu[i] != alt[i]]
+    return [f"[{i}] {alt[i]}→{neu[i]}" for i in range(min(len(neu), len(alt))) if neu[i] != alt[i]]
 
 
-async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
-                       poll_intervall: float) -> bool:
-    print(f"\n— Pollen / Einzelwert-Abfrage ({minuten:g} min, alle "
-          f"{poll_intervall:g}s) —")
+async def phase_pollen(
+    client: BleakClient, log: Protokoll, minuten: float, poll_intervall: float
+) -> bool:
+    print(f"\n— Pollen / Einzelwert-Abfrage ({minuten:g} min, alle {poll_intervall:g}s) —")
     print("»  Finger in den PO60 legen und eine Messung LAUFEN lassen. Ziel:")
     print("»  herausfinden, ob sich der AKTUELLE Wert abfragen lässt (Pull).")
     print("»  Tipp: zwischendurch tief durchatmen / den Finger leicht bewegen,")
     print("»  damit SpO₂/Puls schwanken — nur so verrät sich ein Vitalwert-Byte.")
     print("»  Orientierung in Hex: SpO₂ 97 = 0x61, Puls 72 = 0x48.")
 
-    empfangen = []                          # (uuid, roh) je Notification
+    empfangen = []  # (uuid, roh) je Notification
 
     def _mk(uuid: str):
         samm = po60.SpeicherSammler()
@@ -1766,8 +1868,10 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
             b = bytes(daten)
             fertig = samm.aufnehmen(b)
             empfangen.append((uuid, b))
-            log.zeile("notify", quelle=uuid, roh=b,
-                      dekodiert=[_dekodiert_dict(r) for r in fertig] or None)
+            log.zeile(
+                "notify", quelle=uuid, roh=b, dekodiert=[_dekodiert_dict(r) for r in fertig] or None
+            )
+
         return _cb
 
     abonniert = []
@@ -1778,8 +1882,7 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
                     await client.start_notify(ch, _mk(str(ch.uuid)))
                     abonniert.append(str(ch.uuid))
                 except Exception as exc:
-                    log.zeile("fehler", quelle=str(ch.uuid),
-                              meldung=f"start_notify: {exc}")
+                    log.zeile("fehler", quelle=str(ch.uuid), meldung=f"start_notify: {exc}")
     print(f"Abonniert: {', '.join(abonniert) or 'nichts (!)'}")
 
     # FF03 (Vendor, Funktion unbekannt) ist der Hauptverdächtige fürs
@@ -1813,8 +1916,7 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
                 log.zeile("fehler", quelle=uuid, meldung=f"read: {exc}")
                 continue
             aend = _aenderungen(wert, letzte_reads.get(uuid))
-            log.zeile("read", quelle=uuid, roh=wert,
-                      dekodiert={"aenderungen": aend or None})
+            log.zeile("read", quelle=uuid, roh=wert, dekodiert={"aenderungen": aend or None})
             hinweis = f"  ★ {', '.join(aend)}" if aend else ""
             print(f"    read {uuid[:8]} = {wert.hex()}{hinweis}")
             letzte_reads[uuid] = wert
@@ -1832,11 +1934,9 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
             print(f"  {cmd.hex()} → {antwort.hex()}")
         else:
             print(f"  {cmd.hex()} → (keine Antwort)")
-    log.zeile("status", dekodiert={
-        "poll_kandidaten": [c.hex() for c in kandidaten]})
+    log.zeile("status", dekodiert={"poll_kandidaten": [c.hex() for c in kandidaten]})
     if kandidaten:
-        print(f"\nAntwortende Kommandos: "
-              f"{', '.join(c.hex() for c in kandidaten)}")
+        print(f"\nAntwortende Kommandos: {', '.join(c.hex() for c in kandidaten)}")
     else:
         print("\nKein 0x90-Kommando antwortet — ein Pull über die 0x90-Familie")
         print("existiert damit nicht. Es bleibt der Read-Weg (FF03 & Co.),")
@@ -1847,8 +1947,9 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
     #     wach (< 35 s Idle-Timeout, Befund Lauf 3) — kein eigenes Keep-Alive
     #     nötig, solange poll_intervall klein genug bleibt. ---
     if poll_intervall > 30:
-        print("⚠  poll-intervall > 30 s — das Gerät könnte zwischendurch "
-              "wegen Idle-Timeout trennen.")
+        print(
+            "⚠  poll-intervall > 30 s — das Gerät könnte zwischendurch wegen Idle-Timeout trennen."
+        )
     ende = time.monotonic() + minuten * 60.0
     durchgehalten = True
     try:
@@ -1860,7 +1961,7 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
             runde_start = time.monotonic()
             print(f"\n— {datetime.now():%H:%M:%S} —")
             await _reads()
-            for cmd in (kandidaten or [po60.CMD_HANDSHAKE]):
+            for cmd in kandidaten or [po60.CMD_HANDSHAKE]:
                 if client._po60_trennung.is_set():
                     break
                 antwort = await _senden_sammeln(cmd)
@@ -1893,8 +1994,9 @@ async def phase_pollen(client: BleakClient, log: Protokoll, minuten: float,
 
 ```python
 async def cmd_pollen(args, log: Protokoll) -> None:
-    await _mit_verbindung(args, log, [
-        lambda c: phase_pollen(c, log, args.minuten, args.poll_intervall)])
+    await _mit_verbindung(
+        args, log, [lambda c: phase_pollen(c, log, args.minuten, args.poll_intervall)]
+    )
 ```
 
 **Parser** (neben den anderen `sub.add_parser`-Blöcken) und Dispatch:
