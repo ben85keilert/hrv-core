@@ -57,6 +57,9 @@ from .artifacts import clean_rr
 from .constants import (
     AUFNAHME_RR_MAX_MS,
     AUFNAHME_RR_MIN_MS,
+    DFA_WINDOW_N,
+    LIVE_DFA_ARTEFAKT_MAX,
+    LIVE_DFA_S,
     LIVE_FENSTER_S,
     LIVE_HF_S,
     LIVE_MIN_SCHLAEGE,
@@ -66,6 +69,7 @@ from .constants import (
     MALIK_THRESHOLD_EKG,
     MALIK_WINDOW,
 )
+from .nonlinear import compute_dfa_alpha1
 from .regeln import Korrekturregeln
 from .time_domain import compute_time_domain
 
@@ -313,6 +317,48 @@ class LiveFenster:
             schlaege=int(((rr > 0) & gewertet).sum()),
             verworfen=int(np.asarray(self._verworfen, dtype=bool).sum()),
         )
+
+    def dfa_a1(self, dauer_s: float = LIVE_DFA_S) -> float | None:
+        """DFA α1 über die letzten ``DFA_WINDOW_N`` guten Schläge — Vorschau für die Uhr.
+
+        Dieselbe Rechnung wie in der Aufzeichnung (`nonlinear.compute_dfa_alpha1`,
+        Skalen 4–16, 200 Schläge), auf den **guten Rohwerten** (plausibel, nicht
+        markiert, gewertet) der letzten ``dauer_s`` Sekunden. ``None``, wenn darin
+        weniger als 200 gute Schläge liegen oder im Bereich dieser 200 Schläge mehr
+        als `LIVE_DFA_ARTEFAKT_MAX` der Schläge markiert sind — wie die trainingsapp
+        je Kilometer (`core.hrv_training.werte_zwischen`). Mit 200 Schlägen reicht
+        das Fenster bei 120 bpm 100 s zurück, bei 75 bpm 160 s.
+
+        >>> rng = np.random.default_rng(1)
+        >>> f = LiveFenster()
+        >>> t = 0.0
+        >>> for rr in 800 + rng.normal(0, 20, 300):
+        ...     t += rr / 1000
+        ...     f.hinzufuegen(t, int(rr), 75)
+        >>> 0.3 < f.dfa_a1() < 0.7
+        True
+        >>> LiveFenster().dfa_a1() is None
+        True
+        """
+        if len(self._t) == 0:
+            return None
+        artefakt, _ = self._bewerten()
+        t = np.asarray(self._t, dtype=float)
+        rr = np.asarray(self._rr, dtype=float)
+        im = t >= float(t[-1]) - dauer_s
+        mit_rr = im & (rr > 0) & self._gewertet()
+        gut = mit_rr & ~artefakt
+        if int(gut.sum()) < DFA_WINDOW_N:
+            return None
+        # Artefaktanteil im Bereich, den die letzten 200 guten Schläge aufspannen
+        idx = np.flatnonzero(gut)[-DFA_WINDOW_N:]
+        bereich = slice(int(idx[0]), int(idx[-1]) + 1)
+        schlaege = mit_rr[bereich]
+        anteil = float(artefakt[bereich][schlaege].mean()) if schlaege.any() else 0.0
+        if anteil >= LIVE_DFA_ARTEFAKT_MAX:
+            return None
+        r = compute_dfa_alpha1(rr[gut][-DFA_WINDOW_N:], window_n=DFA_WINDOW_N)
+        return None if r is None else float(r["dfa_alpha1"])
 
     def verlaufsreihe(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """``(t, rr, naht_davor)`` für Verlaufskurven (`trends.verlauf`).

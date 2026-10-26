@@ -176,6 +176,11 @@ LIVE_SDNN_S: Final[float] = 60.0
 LIVE_HF_S: Final[float] = 60.0  # mittlere Herzfrequenz und Schwankung
 LIVE_SCHWANKUNG_TEIL_S: Final[float] = 10.0  # Teilfenster der Schwankung
 LIVE_MIN_SCHLAEGE: Final[int] = 5  # darunter liefert ein Live-Wert None
+# Live-DFA α1 (Vorschau für die Uhr, trainingsapp/hrv-watch, 26.10.2026): die letzten
+# DFA_WINDOW_N guten Schläge, gesucht höchstens so weit zurück; mehr markierte Schläge
+# im Fenster als dieser Anteil: kein Wert (wie `trainingsapp.core.hrv_training` je km)
+LIVE_DFA_S: Final[float] = 300.0
+LIVE_DFA_ARTEFAKT_MAX: Final[float] = 0.03
 
 # ---------------------------------------------------------------------------
 # Lückenpolitik

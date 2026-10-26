@@ -274,6 +274,7 @@ Verworfenem folgen den `Korrekturregeln` (live ohne Ketten).
 | `rmssd_30s`, `sdnn_60s` | Rohwerte der letzten 30 / 60 s; Artefakte wirken als **Naht** (Boundary-Skip), nicht als interpolierter Wert |
 | `hf_mittel_60s` | Mittel der vom Gerät gemeldeten Herzfrequenz |
 | `schwankung_60s` | siehe unten |
+| `dfa_a1()` | DFA α1 wie in der Aufzeichnung (`nonlinear.compute_dfa_alpha1`, 200 Schläge, Skalen 4–16) über die letzten 200 **guten Rohwerte** der letzten 5 min; `None` unter 200 guten Schlägen oder ab 3 % markierten Schlägen in deren Bereich (`LIVE_DFA_S`, `LIVE_DFA_ARTEFAKT_MAX`). Vorschau für die Uhr am Handgelenk (trainingsapp, hrv-watch, 26.10.2026), keine Kennzahl der Datei |
 
 Unter fünf guten Schlägen im Fenster ist ein Wert `None`. Am rechten Rand fehlen
 Malik die Nachfolger — ein frischer Ausreißer wird oft erst ein, zwei Schläge
