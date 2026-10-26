@@ -275,6 +275,8 @@ Verworfenem folgen den `Korrekturregeln` (live ohne Ketten).
 | `hf_mittel_60s` | Mittel der vom Gerät gemeldeten Herzfrequenz |
 | `schwankung_60s` | siehe unten |
 | `dfa_a1()` | DFA α1 wie in der Aufzeichnung (`nonlinear.compute_dfa_alpha1`, 200 Schläge, Skalen 4–16) über die letzten 200 **guten Rohwerte** der letzten 5 min; `None` unter 200 guten Schlägen oder ab 3 % markierten Schlägen in deren Bereich (`LIVE_DFA_S`, `LIVE_DFA_ARTEFAKT_MAX`). Vorschau für die Uhr am Handgelenk (trainingsapp, hrv-watch, 26.10.2026), keine Kennzahl der Datei |
+| `atemfrequenz()` | Atemfrequenz wie in der Auswertung (`atmung.atemfrequenz`, Modus Atemübung) über die **korrigierte** Reihe der letzten 60 s (`LIVE_ATEM_S`); `None`, wenn die Atmung nicht deutlich ist (Belastung, Lücken, kein Gipfel). Vorschau für Atemübungen am Band (26.10.2026) |
+| `artefaktanteil()` | Anteil markierter an den gewerteten Schlägen mit RR der letzten 60 s (`LIVE_ARTEFAKT_S`); `None` unter 5 Schlägen. Gurt-Warnung der trainingsapp ab 10 %, Entwarnung unter 5 % (`LIVE_ARTEFAKT_WARNUNG`, `LIVE_ARTEFAKT_ENTWARNUNG`) |
 
 Unter fünf guten Schlägen im Fenster ist ein Wert `None`. Am rechten Rand fehlen
 Malik die Nachfolger — ein frischer Ausreißer wird oft erst ein, zwei Schläge

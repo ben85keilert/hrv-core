@@ -181,6 +181,13 @@ LIVE_MIN_SCHLAEGE: Final[int] = 5  # darunter liefert ein Live-Wert None
 # im Fenster als dieser Anteil: kein Wert (wie `trainingsapp.core.hrv_training` je km)
 LIVE_DFA_S: Final[float] = 300.0
 LIVE_DFA_ARTEFAKT_MAX: Final[float] = 0.03
+# Live-Atemfrequenz (Atemübungen am Band, 26.10.2026): Fenster über die korrigierten RR
+LIVE_ATEM_S: Final[float] = 60.0
+# Live-Artefaktanteil (Gurt-Warnung): Fenster, ab dem Anteil gewarnt wird, und ab
+# welchem die Warnung wieder erlischt (Hysterese)
+LIVE_ARTEFAKT_S: Final[float] = 60.0
+LIVE_ARTEFAKT_WARNUNG: Final[float] = 0.10
+LIVE_ARTEFAKT_ENTWARNUNG: Final[float] = 0.05
 
 # ---------------------------------------------------------------------------
 # Lückenpolitik

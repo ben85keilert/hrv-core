@@ -54,10 +54,13 @@ from dataclasses import dataclass
 import numpy as np
 
 from .artifacts import clean_rr
+from .atmung import ATEMUEBUNG, atemfrequenz
 from .constants import (
     AUFNAHME_RR_MAX_MS,
     AUFNAHME_RR_MIN_MS,
     DFA_WINDOW_N,
+    LIVE_ARTEFAKT_S,
+    LIVE_ATEM_S,
     LIVE_DFA_ARTEFAKT_MAX,
     LIVE_DFA_S,
     LIVE_FENSTER_S,
@@ -359,6 +362,56 @@ class LiveFenster:
             return None
         r = compute_dfa_alpha1(rr[gut][-DFA_WINDOW_N:], window_n=DFA_WINDOW_N)
         return None if r is None else float(r["dfa_alpha1"])
+
+    def atemfrequenz(self, dauer_s: float = LIVE_ATEM_S, modus: str = ATEMUEBUNG) -> float | None:
+        """Atemfrequenz (1/min) der letzten ``dauer_s`` Sekunden — Vorschau für die Uhr.
+
+        Dieselbe Rechnung wie in der Auswertung (`atmung.atemfrequenz`) auf der
+        **korrigierten** Reihe (Artefakte überbrückt, verworfene Schläge fehlen).
+        ``None``, wenn die Atmung nicht deutlich ist: zu wenig Schläge, Lücken, Puls
+        über 110 bpm (Belastung) oder kein klarer Gipfel. ``modus`` wie dort:
+        `ATEMUEBUNG` wertet auch langsames Atmen, `RUHE` ab 8/min.
+
+        >>> f = LiveFenster()
+        >>> t = 0.0
+        >>> for i in range(90):
+        ...     rr = 1000 + 40 * np.sin(2 * np.pi * 0.1 * t)   # 6 Atemzüge je Minute
+        ...     t += rr / 1000
+        ...     f.hinzufuegen(t, int(rr), 60)
+        >>> round(f.atemfrequenz(), 1)
+        6.0
+        >>> LiveFenster().atemfrequenz() is None
+        True
+        """
+        if len(self._t) == 0:
+            return None
+        _, rr_korr = self._bewerten()
+        t = np.asarray(self._t, dtype=float)
+        ende = float(t[-1])
+        a = atemfrequenz(t, rr_korr, ende - dauer_s, ende, modus=modus)
+        return a.rate_pro_min if a.gueltig else None
+
+    def artefaktanteil(self, dauer_s: float = LIVE_ARTEFAKT_S) -> float | None:
+        """Anteil markierter Schläge an den gewerteten mit RR der letzten ``dauer_s``
+        Sekunden — ``None`` unter `LIVE_MIN_SCHLAEGE` Schlägen. Für die Gurt-Warnung
+        der trainingsapp (rutschender oder trockener Gurt, 26.10.2026).
+
+        >>> f = LiveFenster()
+        >>> for i in range(1, 21):
+        ...     f.hinzufuegen(i * 0.8, 800 if i % 5 else 300, 75)
+        >>> f.artefaktanteil()
+        0.2
+        """
+        if len(self._t) == 0:
+            return None
+        artefakt, _ = self._bewerten()
+        t = np.asarray(self._t, dtype=float)
+        rr = np.asarray(self._rr, dtype=float)
+        im = (t >= float(t[-1]) - dauer_s) & (rr > 0) & self._gewertet()
+        n = int(im.sum())
+        if n < LIVE_MIN_SCHLAEGE:
+            return None
+        return float(artefakt[im].sum()) / n
 
     def verlaufsreihe(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """``(t, rr, naht_davor)`` für Verlaufskurven (`trends.verlauf`).
