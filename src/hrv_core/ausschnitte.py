@@ -272,8 +272,14 @@ def paare_aus_notizen(
     out: list[Abschnitt] = []
     for spur, g in starts.items():
         bis = enden.get(spur, ende)
-        if bis - g.x >= MIN_ABSCHNITT_S:
-            out.append(Abschnitt(g.name, g.x, bis, id=spur, kopf_s=g.kopf_s, endteil_s=g.endteil_s))
+        # Ein laufender (ohne Ende) zählt von der ersten Sekunde an — live soll er gleich
+        # in Chip und Liste stehen; ein beendeter braucht `MIN_ABSCHNITT_S`
+        if spur not in enden or bis - g.x >= MIN_ABSCHNITT_S:
+            out.append(
+                Abschnitt(
+                    g.name, g.x, max(bis, g.x), id=spur, kopf_s=g.kopf_s, endteil_s=g.endteil_s
+                )
+            )
     out.sort(key=lambda a: (a.von_s, a.bis_s))
     farben_nach_namen(out)
     return out

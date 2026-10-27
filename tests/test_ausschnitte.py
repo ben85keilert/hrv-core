@@ -345,6 +345,7 @@ def test_eigener_abschnitt_als_notizpaar_mit_kopf_und_endteil(tmp_path) -> None:
     assert von == pytest.approx(70, abs=1.5) and bis == pytest.approx(170, abs=1.5)
     # Ohne Ende läuft er bis ans Ende (live)
     assert paare_aus_notizen([start], zb.x, 400.0)[0].bis_s == 400.0
+    assert paare_aus_notizen([start], zb.x, 60.5)[0].dauer_s < 1.0  # gleich da, auch kurz
     # Beim Speichern der Aufnahme: Spur je Abschnitt, Kennung und Ränder im Sidecar
     teile = spuren_speichern(
         pfad, rec, {"seg-1a2b3c4d": [(start, "Behandlung", False), (ende, "", True)]}
