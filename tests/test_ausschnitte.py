@@ -19,6 +19,7 @@ from hrv_core.ausschnitte import (
     aus_grenzen,
     einrasten,
     grenzen_speichern,
+    paare_aus_notizen,
     spuren_speichern,
     zusatz_lesen,
     zusatz_speichern,
@@ -305,3 +306,55 @@ def test_zusatz_speichern_schreibt_segmente_fort(tmp_path) -> None:
     segs = json.loads(analyse_pfad(pfad).read_text())["segments"]
     assert [s["id"] for s in segs] == [GESAMT_ID, "seg-2"]
     assert segs[1]["active"] is True and segs[1]["visible"] is True and segs[1]["metrics"] is None
+
+
+def test_eigener_abschnitt_als_notizpaar_mit_kopf_und_endteil(tmp_path) -> None:
+    """trainingsapp 27.10.2026: Ein eigener Abschnitt ist ein Paar Grenz-Notizen mit der
+    Kennung als Spur; Kopf und Endteil hängen an der Start-Notiz, das Sidecar bekommt die
+    Kennung als ``id`` und die Ränder als ``rand``; der Rechenbereich nimmt sie mit."""
+    pfad = tmp_path / GOLDEN.name
+    shutil.copy(GOLDEN, pfad)
+    rec = laden(pfad)
+    achse = schlagzeiten(rec)
+    zb = Zeitbezug(lambda: rec.beats, rec.start_utc, achse=lambda: achse)
+    start = notiz(
+        "Behandlung: Start",
+        zb.anker(60),
+        rec.start_utc,
+        marke={
+            "quelle": "person",
+            "art": "abschnitt",
+            "spur": "seg-1a2b3c4d",
+            "name": "Behandlung",
+            "kopf_s": -10,
+            "endteil_s": 20,
+        },
+    )
+    ende = notiz(
+        "Behandlung: Ende",
+        zb.anker(150),
+        rec.start_utc,
+        marke={"quelle": "person", "art": "ende", "spur": "seg-1a2b3c4d", "name": "Behandlung"},
+    )
+    assert start["marke"]["kopf_s"] == -10 and start["marke"]["endteil_s"] == 20
+    # Aus den Notizen (Auswertung, live)
+    (a,) = paare_aus_notizen([start, ende, {"text": "frei"}], zb.x, 400.0)
+    assert (a.id, a.name, a.kopf_s, a.endteil_s) == ("seg-1a2b3c4d", "Behandlung", -10, 20)
+    assert a.von_s == pytest.approx(60, abs=1.5) and a.bis_s == pytest.approx(150, abs=1.5)
+    von, bis = a.rechenbereich(0.0, 400.0)
+    assert von == pytest.approx(70, abs=1.5) and bis == pytest.approx(170, abs=1.5)
+    # Ohne Ende läuft er bis ans Ende (live)
+    assert paare_aus_notizen([start], zb.x, 400.0)[0].bis_s == 400.0
+    # Beim Speichern der Aufnahme: Spur je Abschnitt, Kennung und Ränder im Sidecar
+    teile = spuren_speichern(
+        pfad, rec, {"seg-1a2b3c4d": [(start, "Behandlung", False), (ende, "", True)]}
+    )
+    assert [(t.id, t.kopf_s, t.endteil_s) for t in teile] == [("seg-1a2b3c4d", -10, 20)]
+    _, gelesen = zusatz_lesen(pfad, float)
+    assert [(t.id, t.kopf_s, t.endteil_s) for t in gelesen] == [("seg-1a2b3c4d", -10, 20)]
+    doc = json.loads(analyse_pfad(pfad).read_text())
+    assert doc["segments"][0]["rand"] == {"kopf_s": -10, "endteil_s": 20}
+    # Ränder weg → das Feld verschwindet wieder
+    gelesen[0].kopf_s = gelesen[0].endteil_s = 0.0
+    zusatz_speichern(pfad, None, gelesen, float)
+    assert "rand" not in json.loads(analyse_pfad(pfad).read_text())["segments"][0]

@@ -77,19 +77,53 @@ GESAMT_ID = "gesamt"
 MIN_ABSCHNITT_S = 10.0
 
 
+#: Kennung eines Abschnitts — im Sidecar seine ``id``, in der Messdatei die ``spur`` seiner
+#: Grenz-Notizen (eigene Abschnitte der Person, trainingsapp 27.10.2026)
+KENNUNG_PRAEFIX = "seg-"
+
+
+def neue_kennung() -> str:
+    """``seg-`` und acht Hexzeichen — wie praxis_gui seine Segmente benennt.
+
+    >>> k = neue_kennung(); k.startswith(KENNUNG_PRAEFIX), len(k)
+    (True, 12)
+    """
+    return f"{KENNUNG_PRAEFIX}{uuid.uuid4().hex[:8]}"
+
+
 @dataclass
 class Abschnitt:
-    """Ein benannter Zeitbereich auf der Kurvenachse der App."""
+    """Ein benannter Zeitbereich auf der Kurvenachse der App.
+
+    ``kopf_s``/``endteil_s`` (trainingsapp, 27.10.2026): Kopf und Endteil — der
+    **Rechenbereich** reicht so viele Sekunden über die getippten Grenzen hinaus (positiv:
+    davor bzw. danach) oder beginnt dahinter (negativ: innerhalb). ``von_s``/``bis_s``
+    bleiben die getippten Grenzen (praxis_gui sieht sie als Abschnitt).
+
+    >>> a = Abschnitt("Behandlung", 600, 1800, kopf_s=-120, endteil_s=300)
+    >>> a.dauer_s, a.rechenbereich(0, 2000), a.rechenbereich(700, 1900)
+    (1200, (720, 2000), (720, 1900))
+    """
 
     name: str
     von_s: float
     bis_s: float
-    id: str = field(default_factory=lambda: f"seg-{uuid.uuid4().hex[:8]}")
+    id: str = field(default_factory=neue_kennung)
     farbe: str = FARBEN[0]
+    kopf_s: float = 0.0
+    endteil_s: float = 0.0
 
     @property
     def dauer_s(self) -> float:
         return self.bis_s - self.von_s
+
+    def rechenbereich(self, anfang: float, ende: float) -> tuple[float, float]:
+        """``(von, bis)`` mit Kopf und Endteil, begrenzt auf ``anfang``…``ende`` und
+        mindestens `MIN_ABSCHNITT_S` breit (ein Kopf, der den Abschnitt auffräße, wird
+        gekappt)."""
+        von = max(anfang, min(self.von_s - self.kopf_s, ende - MIN_ABSCHNITT_S))
+        bis = min(ende, max(self.bis_s + self.endteil_s, von + MIN_ABSCHNITT_S))
+        return von, bis
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,12 +131,16 @@ class Grenze:
     """Ein gewählter Abschnittsanfang: Zeit auf der Kurvenachse und Name.
 
     ``schluss``: beendet nur den laufenden Abschnitt und beginnt keinen
-    („Timer fertig").
+    („Timer fertig"). ``id``, ``kopf_s``, ``endteil_s``: Kennung und Ränder des
+    Abschnitts, den sie beginnt (`Abschnitt`) — ohne ``id`` eine neue Kennung.
     """
 
     x: float
     name: str
     schluss: bool = False
+    id: str | None = None
+    kopf_s: float = 0.0
+    endteil_s: float = 0.0
 
 
 def grundname(name: str) -> str:
@@ -149,7 +187,94 @@ def aus_grenzen(grenzen: Sequence[Grenze], anfang: float, ende: float) -> list[A
     out: list[Abschnitt] = []
     for a, b in pairwise([*punkte, Grenze(ende, "", schluss=True)]):
         if not a.schluss and b.x - a.x >= MIN_ABSCHNITT_S:
-            out.append(Abschnitt(a.name.strip() or "Abschnitt", a.x, b.x))
+            teil = Abschnitt(
+                a.name.strip() or "Abschnitt", a.x, b.x, kopf_s=a.kopf_s, endteil_s=a.endteil_s
+            )
+            if a.id:
+                teil.id = a.id
+            out.append(teil)
+    farben_nach_namen(out)
+    return out
+
+
+def grenze_aus_notiz(x: float, eintrag: Mapping[str, Any], name: str, schluss: bool) -> Grenze:
+    """Die `Grenze` zu einer Grenz-Notiz: Kennung und Ränder aus ihrer Marke.
+
+    Eigene Abschnitte der Person tragen ihre Kennung als ``spur`` (``seg-…``); Kopf und
+    Endteil stehen an der Start-Notiz jedes Abschnitts (`ereignisse.MARKE_FELDER`).
+
+    >>> m = {"marke": {"quelle": "person", "art": "abschnitt", "spur": "seg-1a2b3c4d",
+    ...                "name": "Behandlung", "kopf_s": -120, "endteil_s": 300}}
+    >>> g = grenze_aus_notiz(600.0, m, "Behandlung", False)
+    >>> g.id, g.kopf_s, g.endteil_s
+    ('seg-1a2b3c4d', -120.0, 300.0)
+    >>> grenze_aus_notiz(60.0, {"marke": {"spur": "timer", "kopf_s": 30}}, "Belastung", False)
+    Grenze(x=60.0, name='Belastung', schluss=False, id=None, kopf_s=30.0, endteil_s=0.0)
+    """
+    marke = eintrag.get("marke") if isinstance(eintrag, Mapping) else None
+    marke = marke if isinstance(marke, Mapping) else {}
+    spur = str(marke.get("spur") or "")
+    return Grenze(
+        x,
+        name,
+        schluss,
+        id=spur if spur.startswith(KENNUNG_PRAEFIX) else None,
+        kopf_s=_zahl(marke.get("kopf_s")),
+        endteil_s=_zahl(marke.get("endteil_s")),
+    )
+
+
+def _zahl(v: Any) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    return f if np.isfinite(f) else 0.0
+
+
+def paare_aus_notizen(
+    ereignisse: Sequence[Mapping[str, Any]],
+    x_von: Callable[[Mapping[str, Any]], float | None],
+    ende: float,
+) -> list[Abschnitt]:
+    """Eigene Abschnitte der Person aus ihren Grenz-Notizen (trainingsapp, 27.10.2026).
+
+    Ein Abschnitt ist das Paar ``person/abschnitt`` (Start) und ``person/ende`` mit derselben
+    ``spur`` = Kennung. Ohne Ende reicht er bis ``ende`` (live: er läuft noch). Name, Kopf
+    und Endteil kommen von der Start-Notiz; ``x_von`` liefert die Stelle einer Notiz auf
+    der Kurvenachse (``None``: nicht verankert — dann zählt sie nicht).
+
+    >>> def m(x, art, spur, **rest):
+    ...     return {"x": x, "marke": {"quelle": "person", "art": art, "spur": spur, **rest}}
+    >>> teile = paare_aus_notizen(
+    ...     [m(600, "abschnitt", "seg-aaaaaaaa", name="Behandlung", kopf_s=-120),
+    ...      m(1800, "ende", "seg-aaaaaaaa"), m(2000, "abschnitt", "seg-bbbbbbbb", name="Ruhe"),
+    ...      {"x": 100, "text": "ohne Marke"}, m(50, "abschnitt", "timer", name="nicht eigen")],
+    ...     lambda e: e.get("x"), 2600)
+    >>> [(a.id, a.name, a.von_s, a.bis_s, a.kopf_s) for a in teile]
+    [('seg-aaaaaaaa', 'Behandlung', 600, 1800, -120.0), ('seg-bbbbbbbb', 'Ruhe', 2000, 2600, 0.0)]
+    """
+    starts: dict[str, Grenze] = {}
+    enden: dict[str, float] = {}
+    for e in ereignisse:
+        marke = e.get("marke") if isinstance(e, Mapping) else None
+        if not isinstance(marke, Mapping) or marke.get("quelle") != "person":
+            continue
+        spur = str(marke.get("spur") or "")
+        if not spur.startswith(KENNUNG_PRAEFIX) or (x := x_von(e)) is None:
+            continue
+        art = marke.get("art")
+        if art == "abschnitt" and spur not in starts:
+            name = str(marke.get("name") or e.get("text") or "Abschnitt")
+            starts[spur] = grenze_aus_notiz(x, e, name, False)
+        elif art == "ende" and spur not in enden:
+            enden[spur] = x
+    out: list[Abschnitt] = []
+    for spur, g in starts.items():
+        bis = enden.get(spur, ende)
+        if bis - g.x >= MIN_ABSCHNITT_S:
+            out.append(Abschnitt(g.name, g.x, bis, id=spur, kopf_s=g.kopf_s, endteil_s=g.endteil_s))
+    out.sort(key=lambda a: (a.von_s, a.bis_s))
     farben_nach_namen(out)
     return out
 
@@ -288,13 +413,16 @@ def zusatz_lesen(
         except (KeyError, TypeError, ValueError):
             continue
         if bis > von:
+            rand = d.get("rand") if isinstance(d.get("rand"), dict) else {}
             abschnitte.append(
                 Abschnitt(
                     str(d.get("name") or "Abschnitt"),
                     von,
                     bis,
-                    id=str(d.get("id") or f"seg-{uuid.uuid4().hex[:8]}"),
+                    id=str(d.get("id") or neue_kennung()),
                     farbe=str(d.get("color") or FARBEN[len(abschnitte) % len(FARBEN)]),
+                    kopf_s=_zahl(rand.get("kopf_s")),
+                    endteil_s=_zahl(rand.get("endteil_s")),
                 )
             )
     return ausschnitt, abschnitte
@@ -362,6 +490,12 @@ def zusatz_speichern(
                 seg["metrics"] = None
                 seg["computed_utc"] = None
             seg.update({"name": a.name, "t_start_s": von, "t_end_s": bis, "color": a.farbe})
+        # Kopf und Endteil (trainingsapp): nur, wenn gesetzt — praxis_gui kennt das Feld
+        # nicht und ließe es beim eigenen Speichern fallen; die Wahrheit ist die Marke
+        if a.kopf_s or a.endteil_s:
+            seg["rand"] = {"kopf_s": round(a.kopf_s, 3), "endteil_s": round(a.endteil_s, 3)}
+        else:
+            seg.pop("rand", None)
         neu.append(seg)
     doc["segments"] = behalten + neu
     doc["updated_utc"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -407,7 +541,7 @@ def spuren_speichern(
     teile: list[Abschnitt] = []
     for grenzen in spuren.values():
         punkte = [
-            Grenze(x, name, schluss)
+            grenze_aus_notiz(x, eintrag, name, schluss)
             for eintrag, name, schluss in grenzen
             if (x := zb.x(eintrag)) is not None
         ]
@@ -447,6 +581,7 @@ def achsen_umrechnung(
 __all__ = [
     "FARBEN",
     "GESAMT_ID",
+    "KENNUNG_PRAEFIX",
     "MIN_ABSCHNITT_S",
     "Abschnitt",
     "Grenze",
@@ -456,8 +591,11 @@ __all__ = [
     "aus_grenzen",
     "einrasten",
     "farben_nach_namen",
+    "grenze_aus_notiz",
     "grenzen_speichern",
     "grundname",
+    "neue_kennung",
+    "paare_aus_notizen",
     "spuren_speichern",
     "zusatz_lesen",
     "zusatz_speichern",

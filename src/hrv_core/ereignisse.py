@@ -70,6 +70,12 @@ METADATEN: tuple[str, ...] = ("titel", "notiz", "ereignisse")
 #: - ``feld``, ``wert``: bei ``person/leistung`` das Feld der Übung (``reps``, ``hold``)
 #:   und der eingetragene Wert — so lässt sich die Erholung nach 50 gegen 30
 #:   Wiederholungen auswerten, ohne Tabellen über die Zeit abzugleichen (19.10.2026)
+#: - ``kopf_s``, ``endteil_s``: an der **Start-Notiz** eines Abschnitts (trainingsapp,
+#:   27.10.2026): wie weit der Rechenbereich über die getippten Grenzen hinausreicht
+#:   (positiv = davor bzw. danach) oder hinter ihnen beginnt (negativ = innerhalb) —
+#:   `ausschnitte.Abschnitt.rechenbereich`. Ein eigener Abschnitt der Person ist ein Paar
+#:   Notizen ``person/abschnitt`` und ``person/ende`` mit derselben ``spur`` (seine Kennung,
+#:   ``seg-…`` — die ``id`` im Sidecar), `ausschnitte.paare_aus_notizen`
 MARKE_FELDER: tuple[str, ...] = (
     "quelle",
     "art",
@@ -83,6 +89,8 @@ MARKE_FELDER: tuple[str, ...] = (
     "profil",
     "feld",
     "wert",
+    "kopf_s",
+    "endteil_s",
 )
 
 
