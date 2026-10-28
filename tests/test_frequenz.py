@@ -376,3 +376,22 @@ def test_bandkanten_sind_gleitkommafest() -> None:
     power[:] = 0.0
     power[np.isclose(raster, 0.4)] = 1.0
     assert integriere_band(raster, power, 0.15, 0.4) == 0.0  # HF endet vor 0,4
+
+
+def test_vlf_fenster_stuerzt_nicht_ab_wenn_ein_schlag_vor_den_vorigen_rutscht() -> None:
+    """Absturz der Live-Karte (Ben, 28.10.2026): `vlf_fenster` rückt jeden Schlag um sein
+    halbes Intervall zurück; ein langes Intervall nach einem kurzen rutscht dabei vor den
+    vorigen Schlag — `_mittelreihe` nahm ``t[0]`` als Nullpunkt und ``bincount`` warf
+    „'list' argument must have no negative elements“."""
+    import numpy as np
+
+    from hrv_core.frequency import vlf_fenster
+
+    # Live-Achse: mehrere Intervalle einer Notification tragen dieselbe Zeit — das zweite,
+    # längere rückt um sein halbes Intervall weiter zurück als das erste
+    rr = np.full(2000, 900.0)
+    rr[1] = 1100.0
+    t = np.cumsum(rr) / 1000
+    t[1] = t[0]
+    wert = vlf_fenster(t, rr, 0.0, float(t[-1]))
+    assert wert is not None and wert >= 0.0

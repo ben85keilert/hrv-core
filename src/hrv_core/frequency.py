@@ -482,20 +482,26 @@ def _mittelreihe(t: np.ndarray, y: np.ndarray, breite_s: float) -> tuple[np.ndar
     Fach ist genauer als seine Mitte.
 
     NaN in Zeit oder Wert (kaputte Datei, `Beat.from_dict` lässt ``NaN`` durch)
-    fällt vorher weg — sonst warf ``astype(int)``/``bincount`` (Befund R18).
+    fällt vorher weg — sonst warf ``astype(int)``/``bincount`` (Befund R18). Der
+    Nullpunkt ist die **kleinste** Zeit, nicht die erste: `vlf_fenster` rückt jeden Schlag
+    um sein halbes Intervall zurück, dabei kann ein Schlag vor den vorigen rutschen — mit
+    ``t[0]`` gab das ein negatives Fach und ``bincount`` warf (Absturz der Live-Karte,
+    28.10.2026).
 
     >>> t, y = _mittelreihe(np.array([0.1, 0.9, 1.2, 5.1]), np.array([1.0, 3.0, 5.0, 7.0]), 1.0)
     >>> [round(float(x), 3) for x in t], y.tolist()
     ([0.5, 1.2, 5.1], [2.0, 5.0, 7.0])
     >>> _mittelreihe(np.array([0.1, np.nan]), np.array([1.0, 2.0]), 1.0)[1].tolist()
     [1.0]
+    >>> _mittelreihe(np.array([1.0, 0.4, 2.5]), np.array([1.0, 2.0, 3.0]), 1.0)[1].tolist()
+    [1.5, 3.0]
     """
     ok = np.isfinite(t) & np.isfinite(y)
     if not ok.all():
         t, y = t[ok], y[ok]
     if t.size == 0:
         return np.array([]), np.array([])
-    fach = np.floor((t - t[0]) / breite_s).astype(int)
+    fach = np.floor((t - t.min()) / breite_s).astype(int)
     anzahl = np.bincount(fach)
     belegt = anzahl > 0
     zeit = np.bincount(fach, weights=t)[belegt] / anzahl[belegt]
@@ -509,10 +515,11 @@ def _lomb_hann(t: np.ndarray, y: np.ndarray, raster: np.ndarray) -> np.ndarray:
     Prozent ihrer Leistung ins VLF-Band (gemessen +17 %). Die Leistung wird um
     den Energieverlust des Fensters (Mittel von w²) korrigiert.
     """
-    spanne = float(t[-1] - t[0])
+    anfang = float(t.min())
+    spanne = float(t.max() - anfang)
     if spanne <= 0:
         return np.zeros_like(raster)
-    w = 0.5 - 0.5 * np.cos(2.0 * np.pi * (t - t[0]) / spanne)
+    w = 0.5 - 0.5 * np.cos(2.0 * np.pi * (t - anfang) / spanne)
     norm = float(np.mean(w * w))
     if norm <= 0:  # zwei Stützstellen: Hann ist an beiden Enden 0
         return np.zeros_like(raster)
