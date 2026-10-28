@@ -23,10 +23,21 @@ Bleibt ein Backup liegen (Akku leer, Absturz), findet `backups_finden` es beim
 nächsten Start und `backup_lesen` macht daraus wieder ein `Recording` — die
 Wiederherstellung selbst (Messdatei schreiben, Eintrag anlegen) macht
 `devices.messlauf.backup_wiederherstellen`.
+
+**Backup als Journal** (Ben, 28.10.2026, lange Aufnahmen): Das Backup besteht aus dem
+**Kopf** ``.backup_<Start>.json`` (die Datei ohne ``messungen`` und ``ppi_pakete``, dazu
+``_wiederherstellung`` und ``_journal``) und dem **Journal** ``.backup_<Start>.jsonl``, an
+das jeder Aufruf nur die neuen Schläge und PPI-Pakete anhängt. Der Kopf wird nur neu
+geschrieben, wenn sich darin etwas ändert (Titel, Notizen). So kostet ein Backup nach
+36 Stunden dasselbe wie nach einer Minute — vorher wurde alle 15 s die ganze Datei
+(11 MB bei 36 h) neu geschrieben. `backup_lesen` setzt beides zusammen und liest auch
+ältere Backups, die die Schläge noch im Kopf tragen.
 """
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,6 +58,8 @@ _TW_SRC = ("m", "r", "g")
 
 #: Dateimuster des Crash-Backups (Vertrag, Abschnitt 6a)
 BACKUP_MUSTER = ".backup_*.json"
+#: Feld im Kopf: der Name des Journals neben ihm (nur im Backup, nie in der Messdatei)
+JOURNAL = "_journal"
 #: Block, den nur das Backup trägt — was die App zum Wiederherstellen braucht
 #: (Profil, Abschnittsgrenzen des Timers) und was in keine Messdatei gehört.
 WIEDERHERSTELLUNG = "_wiederherstellung"
@@ -123,6 +136,12 @@ class Aufnahme:
         self._ppi_pakete: list[dict[str, Any]] = []
         self._herz_ms = 0  # ganze Millisekunden, wie praxis_gui
         self._backup_pfade: set[Path] = set()
+        #: Was der Kopf des Backups zuletzt enthielt — neu geschrieben nur bei Änderung
+        self._kopf_stand: str | None = None
+        #: Bis wohin Schläge und PPI-Pakete im Journal stehen — und in welchem
+        self._journal_beats = 0
+        self._journal_ppi = 0
+        self._journal_pfad: Path | None = None
 
     # -- Erfassen -----------------------------------------------------------
 
@@ -223,6 +242,10 @@ class Aufnahme:
         """``.backup_<UTC-Start>.json`` — wie praxis_gui (`_start_backup`)."""
         return f".backup_{self.start_utc.strftime('%Y-%m-%d_%H%M%S')}.json"
 
+    def journal_name(self) -> str:
+        """``.backup_<UTC-Start>.jsonl`` — das Journal neben dem Kopf."""
+        return self.backup_name() + "l"
+
     def dateiname(self) -> str:
         """Name der Messdatei, die `speichern` schreiben wird — schon während der Aufnahme
         (für Verweise, etwa eine Einheit der App, die über den Dateinamen verknüpft).
@@ -234,21 +257,73 @@ class Aufnahme:
         return messdatei_name(self.start_utc)
 
     def backup(self, ordner: Path, *, zusatz: Mapping[str, Any] | None = None) -> Path:
-        """Crash-Sicherung, atomar und kompakt (Vertrag, Abschnitt 6a).
+        """Crash-Sicherung als Kopf und Journal (Vertrag, Abschnitt 6a; Modulkopf).
 
-        Gedacht für einen 15-s-Takt. Der Punkt am Anfang hält die Datei aus
-        jeder Messungsliste heraus. ``zusatz`` wird als Block
-        ``_wiederherstellung`` angehängt — nur im Backup, nie in der Messdatei
-        (`backup_lesen` nimmt ihn wieder heraus).
+        Gedacht für einen 15-s-Takt. Der Punkt am Anfang hält die Dateien aus
+        jeder Messungsliste heraus. ``zusatz`` steht im Kopf als Block
+        ``_wiederherstellung`` — nur im Backup, nie in der Messdatei
+        (`backup_lesen` nimmt ihn wieder heraus). Der Kopf wird atomar und nur
+        bei Änderung geschrieben; ans Journal kommen die neuen Zeilen, jede für
+        sich abgeschlossen. Gibt den Pfad des Kopfs zurück.
         """
         ordner = Path(ordner)
         ordner.mkdir(parents=True, exist_ok=True)
         doc = self.recording().to_dict()
+        doc.pop("messungen", None)
+        if self._ppi:
+            doc["ppi_pakete"] = []  # der Schlüssel bleibt, die Pakete stehen im Journal
         if zusatz:
             doc[WIEDERHERSTELLUNG] = dict(zusatz)
-        pfad = json_atomar_schreiben(ordner / self.backup_name(), doc, kompakt=True)
-        self._backup_pfade.add(pfad)
+        doc[JOURNAL] = self.journal_name()
+        kopf_stand = json.dumps(doc, ensure_ascii=False, sort_keys=True, allow_nan=False)
+        pfad = ordner / self.backup_name()
+        if kopf_stand != self._kopf_stand or not pfad.exists():
+            json_atomar_schreiben(pfad, doc, kompakt=True)
+            self._kopf_stand = kopf_stand
+        journal = ordner / self.journal_name()
+        self._journal_anhaengen(journal)
+        self._backup_pfade.update({pfad, journal})
         return pfad
+
+    def _journal_anhaengen(self, pfad: Path) -> None:
+        """Neue Schläge und PPI-Pakete ans Journal — eine Zeile je Eintrag, zuletzt fsync.
+
+        Endet die Datei nicht mit einem Zeilenumbruch (ein Schreiben brach ab), beginnt
+        der Anhang mit einem: Die halbe Zeile bleibt unlesbar und wird beim Lesen
+        übersprungen, die Zähler rücken erst nach dem Schreiben vor.
+        """
+        if pfad != self._journal_pfad or not pfad.exists():
+            # Ein anderer Ordner oder ein verschwundenes Journal: alles noch einmal
+            self._journal_pfad = pfad
+            self._journal_beats = self._journal_ppi = 0
+        neue_beats = self._beats[self._journal_beats :]
+        neue_ppi = self._ppi_pakete[self._journal_ppi :]
+        if not neue_beats and not neue_ppi:
+            return
+        halb = False
+        if pfad.exists() and pfad.stat().st_size:
+            with open(pfad, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                halb = f.read(1) != b"\n"
+        with open(pfad, "a", encoding="utf-8") as f:
+            if halb:
+                f.write("\n")
+            for b in neue_beats:
+                json.dump(
+                    ["b", b.to_dict()],
+                    f,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+                f.write("\n")
+            for p in neue_ppi:
+                json.dump(["p", p], f, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+                f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        self._journal_beats = len(self._beats)
+        self._journal_ppi = len(self._ppi_pakete)
 
     def speichern(self, ordner: Path) -> Path:
         """Schreibt die Messdatei atomar und löscht danach das Backup.
@@ -269,7 +344,7 @@ class Aufnahme:
         pfad = json_atomar_schreiben(freier_pfad(ordner, rec.dateiname()), rec.to_dict())
         # Erst nach erfolgreichem Schreiben aufräumen — sonst ginge bei einem
         # Fehler die einzige Kopie verloren.
-        for alt in {*self._backup_pfade, ordner / self.backup_name()}:
+        for alt in {*self._backup_pfade, ordner / self.backup_name(), ordner / self.journal_name()}:
             alt.unlink(missing_ok=True)
         self._backup_pfade.clear()
         return pfad
@@ -308,12 +383,67 @@ def backup_lesen(pfad: Path | str) -> tuple[Recording, dict[str, Any]]:
         FormatFehler: kein JSON-Objekt (halb geschrieben, von Hand bearbeitet)
             oder ein unlesbarer Messwert — ein `ValueError`, wie bisher.
     """
+    pfad = Path(pfad)
     try:
         doc = json_objekt_lesen(pfad)
     except FormatFehler as fehler:
         raise FormatFehler(f"Backup unlesbar: {fehler}") from fehler
     zusatz = doc.pop(WIEDERHERSTELLUNG, None)
-    return Recording.from_dict(doc), dict(zusatz) if isinstance(zusatz, dict) else {}
+    journal = doc.pop(JOURNAL, None)
+    rec = Recording.from_dict(doc)
+    journal_pfad = pfad.with_name(str(journal)) if journal else pfad.with_name(pfad.name + "l")
+    if journal_pfad.is_file():
+        _journal_lesen(journal_pfad, rec)
+    return rec, dict(zusatz) if isinstance(zusatz, dict) else {}
 
 
-__all__ = ["BACKUP_MUSTER", "WIEDERHERSTELLUNG", "Aufnahme", "backup_lesen", "backups_finden"]
+def backup_entfernen(pfad: Path | str) -> None:
+    """Kopf und Journal eines Backups löschen — nach der Wiederherstellung."""
+    kopf = Path(pfad)
+    kopf.unlink(missing_ok=True)
+    kopf.with_name(kopf.name + "l").unlink(missing_ok=True)
+
+
+def _journal_lesen(pfad: Path, rec: Recording) -> None:
+    """Die Zeilen des Journals in die Messung — Unlesbares (eine halbe Zeile nach einem
+    Abbruch) wird übersprungen, eine doppelte Zeile nach einem Abbruch ebenso."""
+    letzte: dict[str, Any] | None = None
+    with open(pfad, encoding="utf-8") as f:
+        for zeile in f:
+            zeile = zeile.strip()
+            if not zeile:
+                continue
+            try:
+                eintrag = json.loads(zeile)
+            except ValueError:
+                continue
+            if (
+                not isinstance(eintrag, list)
+                or len(eintrag) != 2
+                or not isinstance(eintrag[1], dict)
+            ):
+                continue
+            art, daten = eintrag
+            if art == "b":
+                if daten == letzte:
+                    continue
+                try:
+                    rec.beats.append(Beat.from_dict(daten))
+                except FormatFehler:
+                    continue
+                letzte = daten
+            elif art == "p":
+                if rec.ppi_pakete is None:
+                    rec.ppi_pakete = []
+                rec.ppi_pakete.append(daten)
+
+
+__all__ = [
+    "BACKUP_MUSTER",
+    "JOURNAL",
+    "WIEDERHERSTELLUNG",
+    "Aufnahme",
+    "backup_entfernen",
+    "backup_lesen",
+    "backups_finden",
+]

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -258,6 +258,10 @@ def test_round_trip_speichern_laden(tmp_path: Path) -> None:
 
 
 def test_backup_atomar_kompakt_und_nach_speichern_geloescht(tmp_path: Path) -> None:
+    """Kopf und Journal (28.10.2026): Der Kopf ist die Datei ohne Schläge, das Journal eine
+    Zeile je Schlag; ein weiteres Backup hängt nur an und lässt den Kopf, wie er ist."""
+    from hrv_core.aufnahme import JOURNAL
+
     a = _gefuellt(h10())
     backup = a.backup(tmp_path)
 
@@ -268,17 +272,25 @@ def test_backup_atomar_kompakt_und_nach_speichern_geloescht(tmp_path: Path) -> N
     doc = json.loads(text)
     assert doc["schema"] == "raw-v1"
     assert "hrv" not in doc  # Rohdatenrettung, keine Analyse
-    assert len(doc["messungen"]) == 20
+    assert "messungen" not in doc and doc[JOURNAL] == ".backup_2026-10-12_080000.jsonl"
+    journal = tmp_path / doc[JOURNAL]
+    assert len(journal.read_text(encoding="utf-8").splitlines()) == 20
     assert not list(tmp_path.glob("*.tmp"))
+    kopf_vorher = backup.read_bytes()
 
-    # Ein zweites Backup ersetzt das erste.
+    # Ein zweites Backup hängt den neuen Schlag an — der Kopf bleibt unberührt
     a.schlag(800, 75, START_MONO + 30, "m")
     a.backup(tmp_path)
-    assert len(json.loads(backup.read_text(encoding="utf-8"))["messungen"]) == 21
+    assert len(journal.read_text(encoding="utf-8").splitlines()) == 21
+    assert backup.read_bytes() == kopf_vorher
+    # Ein Titel ändert den Kopf
+    a.titel = "Nacht"
+    a.backup(tmp_path)
+    assert json.loads(backup.read_text(encoding="utf-8"))["titel"] == "Nacht"
 
     pfad = a.speichern(tmp_path)
     assert pfad.exists()
-    assert not backup.exists()
+    assert not backup.exists() and not journal.exists()
     assert sorted(p.name for p in tmp_path.iterdir()) == [pfad.name]
 
 
@@ -292,13 +304,17 @@ def test_abgebrochenes_schreiben_laesst_backup_unversehrt(
     def kaputt(*_args, **_kw):
         raise OSError("Datenträger voll")
 
+    journal = tmp_path / ".backup_2026-10-12_080000.jsonl"
+    journal_vorher = journal.read_bytes()
     monkeypatch.setattr(recording_mod.json, "dump", kaputt)
+    a.schlag(800, 75, START_MONO + 30, "m")  # etwas Neues fürs Journal
     with pytest.raises(OSError):
         a.backup(tmp_path)
     with pytest.raises(OSError):
         a.speichern(tmp_path)
 
     assert backup.read_bytes() == vorher
+    assert journal.read_bytes() == journal_vorher  # nichts Halbes angehängt
     assert not list(tmp_path.glob("*.tmp"))
     assert not list(tmp_path.glob("sensor_*"))
 
@@ -376,20 +392,20 @@ def test_recording_ohne_ppi_bleibt_ohne_schluessel() -> None:
 
 
 def test_backup_mit_zusatz_lesen_laesst_messdatei_sauber(tmp_path: Path) -> None:
-    from hrv_core.aufnahme import WIEDERHERSTELLUNG, backup_lesen
+    from hrv_core.aufnahme import JOURNAL, WIEDERHERSTELLUNG, backup_lesen
 
     a = _gefuellt(h10())
     zusatz = {"subject_id": "p1", "grenzen": [[{"t": 1.0}, "Ruhe", False]]}
     backup = a.backup(tmp_path, zusatz=zusatz)
     doc = json.loads(backup.read_text(encoding="utf-8"))
     assert doc[WIEDERHERSTELLUNG] == zusatz
-    assert list(doc)[-1] == WIEDERHERSTELLUNG  # hinter `messungen`, Kopf unverändert
+    assert list(doc)[-2:] == [WIEDERHERSTELLUNG, JOURNAL]  # hinten, Kopf unverändert
 
     rec, gelesen = backup_lesen(backup)
     assert gelesen == zusatz
-    assert WIEDERHERSTELLUNG not in rec.extra  # darf nie in die Messdatei
+    assert WIEDERHERSTELLUNG not in rec.extra and JOURNAL not in rec.extra  # nie in die Datei
     assert len(rec.beats) == 20 and rec.titel == "Ruhe"
-    assert WIEDERHERSTELLUNG not in rec.to_dict()
+    assert WIEDERHERSTELLUNG not in rec.to_dict() and JOURNAL not in rec.to_dict()
 
     # Ohne Zusatz (älteres Backup, praxis_gui): leerer Zusatz, Daten vollständig
     ohne = a.backup(tmp_path / "ohne")
@@ -505,3 +521,71 @@ def test_altes_dateinamenmuster_ist_weg() -> None:
     """Befund F20: `DATEINAME_MUSTER` war ungenutzt und hätte `_1`-Namen abgelehnt."""
     assert not hasattr(recording_mod, "DATEINAME_MUSTER")
     assert ist_messdatei("sensor_2026-10-12_080000_1.json")
+
+
+# ---------------------------------------------------------------------------
+# Journal-Backup (28.10.2026) und Zusammenfügen
+# ---------------------------------------------------------------------------
+
+
+def test_journal_backup_round_trip_mit_ppi_halber_zeile_und_altem_backup(tmp_path: Path) -> None:
+    from hrv_core.aufnahme import backup_entfernen, backup_lesen
+
+    a = _gefuellt(verity())
+    a.ppi_paket(START_MONO + 5, [800, 810], [5, 6], [0, 0], [1, 1])
+    a.backup(tmp_path)
+    a.schlag(820, 73, START_MONO + 25, "m")
+    a.ppi_paket(START_MONO + 26, [820], [4], [0], [1])
+    kopf = a.backup(tmp_path)
+    journal = tmp_path / ".backup_2026-10-12_080000.jsonl"
+    # Eine halbe Zeile am Ende (Absturz mitten im Schreiben) — der nächste Anhang beginnt
+    # mit einem Umbruch, das Lesen überspringt sie
+    with open(journal, "a", encoding="utf-8") as f:
+        f.write('["b", {"t_s": 99')
+    a.schlag(830, 72, START_MONO + 27, "m")
+    a.backup(tmp_path)
+    rec, _ = backup_lesen(kopf)
+    assert len(rec.beats) == 22 and rec.beats[-1].rr_ms == 830
+    assert rec.ppi_pakete is not None and len(rec.ppi_pakete) == 2
+    assert rec.ppi_pakete[1]["ppi_ms"] == [820]
+    # Das Journal des Kopfs fehlt: die Schläge im Kopf zählen (älteres Backup)
+    alt = tmp_path / "alt" / ".backup_2026-10-12_080000.json"
+    alt.parent.mkdir()
+    doc = a.recording().to_dict()
+    alt.write_text(json.dumps(doc), encoding="utf-8")
+    rec2, _ = backup_lesen(alt)
+    assert len(rec2.beats) == 22
+    backup_entfernen(kopf)
+    assert not kopf.exists() and not journal.exists()
+
+
+def test_zusammenfuegen_zweier_teile_und_befehlszeile(tmp_path: Path, capsys) -> None:
+    from hrv_core.zusammenfuegen import main, zusammenfuegen
+
+    a = _gefuellt(h10())
+    a.titel = "Nacht"
+    a.ereignisse.append({"beat_index": 3, "dt_s": 0.0, "t_wall_s": 3.4, "t_s": 3.2, "text": "x"})
+    teil1 = a.speichern(tmp_path)
+    b = Aufnahme(
+        geraet="H10",
+        geraet_profil="polar_h10",
+        intervall_quelle="ekg_rr",
+        start_mono=START_MONO + 60,
+        start_utc=a.start_utc + timedelta(seconds=60),
+    )
+    for i in range(5):
+        b.schlag(900, 66, START_MONO + 60 + 0.9 * (i + 1), "m")
+    teil2 = b.speichern(tmp_path)
+    ganz = zusammenfuegen([laden(teil2), laden(teil1)])
+    assert len(ganz.beats) == 25 and ganz.titel == "Nacht"
+    assert (
+        ganz.beats[20].t_wall_s == pytest.approx(60.9) and ganz.beats[20].t_s > ganz.beats[19].t_s
+    )
+    naht = [e for e in ganz.ereignisse if e.get("marke", {}).get("quelle") == "zusammenfuegen"]
+    assert len(naht) == 1 and naht[0]["beat_index"] == 20 and naht[0]["text"] == "Teil 2"
+    assert ganz.ereignisse[0]["text"] == "x" and ganz.ereignisse[0]["beat_index"] == 3
+    assert main([str(teil1), str(teil2)]) == 0
+    ziel = teil1.with_name(teil1.stem + "_zusammen.json")
+    assert ziel.exists() and len(laden(ziel).beats) == 25
+    assert "25 Schläge aus 2 Teilen" in capsys.readouterr().out
+    assert main([str(teil1), str(teil2)]) == 1  # gibt es schon

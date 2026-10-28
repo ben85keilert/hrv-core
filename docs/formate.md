@@ -40,12 +40,31 @@ wird eine vorhandene Datei nie ersetzt (`recording.freier_pfad`: `_1`, `_2` …)
 Dateinamen mit `_analyzed`, `_ecg`, `_ppg`, `_truth` und `__cNN` sind keine
 Messdateien (`ist_messdatei`).
 
-## Crash-Backup `.backup_<UTC-Start>.json`
+## Crash-Backup `.backup_<UTC-Start>.json` + `.jsonl`
 
-`aufnahme.Aufnahme.backup` / `backup_lesen`: eine `raw-v1`-Datei plus den Block
-`_wiederherstellung` (App-Zusatz: `subject_id`, `grenzen`, `spuren`), den
-`backup_lesen` wieder entfernt. Nur `.backup_*`-Dateien tragen ihn; `deid`
-entfernt ihn ganz.
+`aufnahme.Aufnahme.backup` / `backup_lesen` / `backup_entfernen` — seit 28.10.2026 **Kopf
+und Journal** (lange Aufnahmen: vorher wurde alle 15 s die ganze Datei neu geschrieben,
+11 MB bei 36 h):
+
+- **Kopf** `.backup_<Start>.json`: die `raw-v1`-Datei **ohne** `messungen` (und mit leerem
+  `ppi_pakete`, wenn das Gerät PPI liefert), plus `_wiederherstellung` (App-Zusatz:
+  `subject_id`, `grenzen`, `spuren`) und `_journal` (der Name des Journals). Atomar, nur
+  bei Änderung neu geschrieben (Titel, Notizen).
+- **Journal** `.backup_<Start>.jsonl`: eine Zeile je Eintrag, angehängt und mit `fsync`
+  abgeschlossen — `["b", {Messung wie in messungen[]}]` bzw. `["p", {PPI-Paket}]`. Eine
+  halbe Zeile (Absturz beim Schreiben) überspringt `backup_lesen`; eine doppelte Zeile
+  direkt hintereinander ebenso.
+- `backup_lesen` setzt beides zusammen; ein Kopf **mit** `messungen` (Backup von vor dem
+  Journal, praxis_gui) wird weiter gelesen. `_wiederherstellung` und `_journal` tragen nur
+  `.backup_*`-Dateien; `deid` entfernt sie.
+
+## Zusammenfügen `sensor_<ts>_zusammen.json`
+
+`zusammenfuegen.zusammenfuegen` / `python -m hrv_core.zusammenfuegen a.json b.json`: Teile
+einer Aufnahme („Teil speichern & weiter“) als eine `raw-v1`-Datei. Wanduhr über den Start
+des ersten Teils (Lücken bleiben Lücken), Herzuhr zählt weiter, Notizen rücken mit
+(`beat_index`, `t_s`, `t_wall_s`), an jeder Naht eine Notiz „Teil n“ mit Marke
+`{"quelle": "zusammenfuegen", "art": "teil", "teil": n}`.
 
 ## `corrected-v1` — `sensor_<ts>__cNN.json`
 
