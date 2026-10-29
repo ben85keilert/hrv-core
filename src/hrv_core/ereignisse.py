@@ -76,6 +76,11 @@ METADATEN: tuple[str, ...] = ("titel", "notiz", "ereignisse")
 #:   `ausschnitte.Abschnitt.rechenbereich`. Ein eigener Abschnitt der Person ist ein Paar
 #:   Notizen ``person/abschnitt`` und ``person/ende`` mit derselben ``spur`` (seine Kennung,
 #:   ``seg-…`` — die ``id`` im Sidecar), `ausschnitte.paare_aus_notizen`
+#: - ``kontext``, ``haltung``: bei ``person/erholung`` (trainingsapp, 29.10.2026; hrv-research
+#:   Entscheidung 14) — Ende einer Belastung: woran (``dauer``, ``intervall``, ``sprint``,
+#:   ``satz``, ``test_submaximal``, ``test_maximal``) und in welcher Haltung die Person
+#:   sich erholt (``steht``, ``sitzt``, ``liegt``, ``geht``); HRR-Werte sind nur innerhalb
+#:   gleicher Paare vergleichbar (`herzfrequenz.hrr_erholung`)
 MARKE_FELDER: tuple[str, ...] = (
     "quelle",
     "art",
@@ -91,6 +96,8 @@ MARKE_FELDER: tuple[str, ...] = (
     "wert",
     "kopf_s",
     "endteil_s",
+    "kontext",
+    "haltung",
 )
 
 

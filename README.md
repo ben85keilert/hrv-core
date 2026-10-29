@@ -19,7 +19,9 @@ fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0
 - `src/hrv_core/` — die Bibliothek (aus `trainingsapp.hrv_core`, ALGO_VERSION 7): `recording`/`aufnahme`
   (raw-v1), `regeln`/`korrektur` (Automatik und Expertenkorrektur, Sidecar analysis-v1), `segments`,
   `time_domain`, `frequency` (samt Spektrogramm), `nonlinear`, `atmung`, `spektralprofil`, `trends`,
-  `ausschnitte`, `ppi`/`zeitachse` (Verity Sense), `live`, `ereignisse`, `referenz` (alles auf einmal), `deid`.
+  `ausschnitte`, `ppi`/`zeitachse` (Verity Sense), `live`, `ereignisse`, `referenz` (alles auf einmal), `deid`,
+  `herzfrequenz` (HF auf der Wanduhr: Ruhe-/Nacht-HF, HFmax-Kandidat, %HRR, Bereiche, Erholung, TRIMP,
+  Wertehierarchie — seit 29.10.2026).
 - `tests/fixtures/` Messdateien ohne Personenbezug · `tests/golden/trainingsapp/` Golden Master
   (`test_golden_trainingsapp.py`, 1e-9) · `tests/golden/praxis_gui/` Vorher-Stand von praxis_gui
   (scipy/NK2) für `docs/VERGLEICH_ZAHLEN.md` · `tests/referenz/` Vergleich gegen scipy/neurokit2.

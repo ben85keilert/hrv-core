@@ -719,6 +719,100 @@ gerechnet statt als Vollmatrix, live auf 500 Schläge begrenzt.
 
 ---
 
+## Herzfrequenz (`src/hrv_core/herzfrequenz.py`)
+
+Seit 29.10.2026 (hrv-research `docs/KONZEPT_HF_APP.md`, Entscheidungen 11–16). Keine
+Änderung an bestehenden Zahlen, deshalb kein Sprung der `ALGO_VERSION`; die Apps hängen
+ihre HF-Caches trotzdem an sie. Referenzfassung mit pandas in hrv-research
+(`src/hrv_research/hf_referenz.py`, Vergleich auf 1e-9).
+
+**Achse.** Die HRV rechnet auf der Herzuhr, die Herzfrequenz auf der **Wanduhr**: Ein reiner
+Pulsgeber (`bpm_only`) schreibt keine RR, seine Herzuhr bleibt 0 (deshalb fällt
+`Recording.dauer_s` dann auf die Wanduhr zurück, Befund B2). `hf_reihe` liefert die HF je
+Rasterzelle (`HF_RASTER_S` = 1 s, Zellanfang als Zeitstempel) mit **Quelle je Zelle**:
+
+| Quelle | Rechnung |
+|---|---|
+| `QUELLE_RR` | Mittel von `60000 / RR` der plausiblen (250–2000 ms), nicht markierten Schläge der Zelle; leere Zellen werden linear gefüllt, wenn die Nachbarzellen höchstens `HF_LUECKE_S` (5 s) auseinanderliegen — bei 40 bpm liegen 1,5 s zwischen zwei Schlägen |
+| `QUELLE_GERAET` | die gemeldete Herzfrequenz (`hf_bpm > 0`), gleich gefüllt — nur wo RR fehlen (Paket ohne RR, Artefaktkette, reiner Pulsgeber); der H10 glättet und hinkt 1–3 s nach |
+| `QUELLE_KEINE` | NaN — zählt in keinem Fenster, Bereich, keiner Last |
+
+Dazu je Zelle `n_rr` und `n_artefakt` (Artefaktanteil eines Fensters).
+
+**Rollfenster.** `rollmittel(hf, fenster_s, min_anteil=0,8)`: nachlaufendes Mittel über
+*n* Zellen, gültig ab 80 % gültiger Zellen; die ersten *n* − 1 Stellen bleiben NaN (kein
+volles Fenster — anders als pandas, das Teilfenster liefert).
+
+| Größe | Vorschrift (INTERLIVE, `schumann2025interlive`) | Gültig |
+|---|---|---|
+| `ruhe_hf_morgen` | tiefstes 30-s-Rollmittel | ≥ 5 min Daten (empfohlen 10 min liegend), Artefaktanteil < 5 % |
+| `nacht_hf` | tiefstes 2-h-Rollmittel in der **bestätigten** Schlafzeit (kein Hersteller-Schlaferkenner) | ≥ 4 h Daten |
+| `tagesminimum` | tiefstes 10-min-Rollmittel | ≥ 10 h Daten |
+| `hfmax_kandidat` | höchstes 30-s-Rollmittel (volle Abdeckung), das drei Prüfungen besteht: Artefaktanteil im Fenster < 5 % (entfällt ohne RR), kein Sprung > 30 % zwischen zwei Zellen, **Plateau**: das Mittel der 30 s davor ≥ 80 % des Kandidaten | sonst das höchste Fenster mit `gueltig = False` und Gründen — ein **Vorschlag**, gesetzt nur durch die Person |
+
+Ein `Fensterwert` trägt Wert, Fenster, Gültigkeit, Gründe, Abdeckung, Artefaktanteil und die
+vorherrschende Quelle.
+
+**Formeln, Reserve, Schwellen.** `formel_hfmax`: Nes 2013/HUNT 211 − 0,64·Alter (SEE 10,8,
+Vorgabe), Tanaka 208 − 0,7·Alter (±10), Gulati 206 − 0,88·Alter (Frauen; SEE wie Nes
+angesetzt, Original noch zu prüfen); 220 − Alter fehlt bewusst; unter 18 Jahren keine
+Formel. `prozent_hrr` = (HF − Ruhe) / (HFmax − Ruhe) · 100 (Karvonen), `hf_aus_prozent`
+umgekehrt. `schwellen_milani` (`milani2024equations`, ESC-Reha-Leitlinie 2026):
+HF(VT1) = 4,866 + 0,405·HFpeak + 0,542·HFruhe, HF(VT2) = −2,606 + 0,773·HFpeak +
+0,254·HFruhe, MAE 7,1 % / 5,0 % — nur mit **gemessener** Spitzen-HF; Beispiel Ruhe 55,
+Peak 185 → 110 / 154 bpm ≈ 42 / 76 % HRR.
+
+**Bereiche.** `bereiche(modell, ruhe, hfmax, …)`: `drei` (42 / 77 % HRR), `acsm` (30 / 40 /
+60 / 90 %, Namen „sehr leicht … nahe maximal“ — Leitlinienbegriffe, kein Urteil), `cluster`
+(zehn gleich breite), `eigen` (bpm oder %, eigene Namen). Sonst heißen Bereiche
+„Bereich 1…n“. Unsicherheit einer Grenze bei *x* % = √((Quellfehler·HRR)² +
+(x·HFmax-Fehler)²) — der HFmax-Fehler geht anteilig ein (`grenz_unsicherheit_bpm`);
+Quellfehler Labor 2,5 %, Talk-Test 5 %, Milani/42-77 6 %. `bereich_index` ordnet zu
+(Grenze gehört zum oberen Bereich), `zeit_je_bereich` zählt Sekunden.
+
+**Zusammenfassung eines Bezugs** (`zusammenfassung`): Dauer, gültige Sekunden, Ø, Minimum,
+**Gipfel = höchstes 5-s-Mittel** (`HF_GIPFEL_S`; eine Einzelsekunde ist kein Maximum),
+Ø %HRR, Sekunden je Bereich, TRIMP, RR-Anteil. **TRIMP** nach Banister:
+Σ Δt[min] · r · a · e^(b·r), r = %HRR/100 geklemmt auf 0…1, a/b = 0,64/1,92 (Männer, ohne
+Angabe) bzw. 0,86/1,67 (Frauen); `trimp_zonen` = Minuten je Bereich × Gewicht (1, 2, 3 …).
+Konventionen, so beschriftet.
+
+**Erholung** (`hrr_erholung`, Entscheidung 14): HF_ende = Mittel der 5 s vor t0 (mindestens
+60 % der erwarteten Zellen, sonst None), HF_t = Mittel der 5 s um t0 + t, HRR_t = HF_ende −
+HF_t für t ∈ {30, 60, 120}; T30 bewusst nicht (`fecchio2019hrr`: nicht reproduzierbar).
+`kontext` und `haltung` sind Pflicht der App; vergleichbar nur innerhalb gleicher Paare.
+
+**Drift** (`drift`): Ø HF zweite gegen erste Hälfte eines Abschnitts; mit einer
+Leistungsreihe auf dem Raster (`auf_raster`) die Entkopplung (HF/L zweite Hälfte) / (HF/L
+erste) − 1 in Prozent — ohne Schwelle (die 5-%-Regel ist Trainerkonvention).
+
+**Vorgeschlagene Abschnitte** (Entscheidung 15): `bouts` = HF ≥ Schwelle (40 % HRR,
+`schwelle_belastung`; ohne Profil Tagesminimum + 25 bpm) über ≥ 3 min, Ende nach 2 min
+darunter, mindestens 70 % der Zellen über der Schwelle; `ruhephasen` = HF ≤ Tagesminimum +
+10 bpm über ≥ 10 min; `schlaf_kandidat` = längste Ruhephase ≥ 4 h im Nachtfenster des
+Aufrufers. Alles Vorschläge, die die Person bestätigt.
+
+**Tagesprofil und Baseline.** `aktivitaetsprofil`: Sekunden je 10-%-HRR-Cluster, gültig ab
+16 h Daten (INTERLIVE; der dortige Aktivitätsscore ist nicht umgesetzt — Gewichte offen).
+`baseline`: Median der letzten 7 Werte mit Band ± 1 SD (ab 3 Werten) — eine Linie mit
+Breite, kein Pfeil.
+
+**Wertehierarchie** (Entscheidung 11, `geltender_wert`): Für eine Größe gilt der
+**festgesetzte** Eintrag, sonst aus der genauesten Quelle mit gültigem Eintrag der jüngste,
+sonst (alles abgelaufen) der jüngste überhaupt. Rangfolgen in `RANGFOLGE` (Ruhe-HF: Nacht ›
+Morgen 10 min › Morgen 5 min › Eintrag › Tagesminimum › Tagesfeld; HFmax: Spiroergometrie ›
+Ergometrie › Feld-Maximaltest › Feldmaximum › Eintrag › Formeln; Schwellen: Labor › Talk-Test
+› Milani › %HRR), Gültigkeit in `GUELTIG_TAGE` (Messungen 14 Tage, Eintrag 90, Tests ein
+Jahr, Formeln unbegrenzt), Vorgabe-Unsicherheiten in `UNSICHERHEIT_BPM`.
+`nenner_fortschreiben`: ein neuer Wert derselben Quelle ersetzt den Nenner erst ab 3 bpm
+Abweichung (Hysterese); ein Quellenwechsel gilt sofort und wird von der App angezeigt.
+
+Die Bibliothek **bewertet nicht**: keine Ampel, kein „zu hoch“, keine Normgrenze —
+Zahlen mit Quelle und Unsicherheit. Golden: die synthetische `bpm_only`-Fixture
+(`scripts/fixture_synth_bpm_only.py`) deckt Wanduhr-Achse, Gerätequelle und Dauer ab.
+
+---
+
 ## Fachlicher Vorbehalt
 
 Nichtlineare Kennzahlen setzen eine präzise R-Zacken-Erkennung voraus. Bei der
@@ -736,9 +830,11 @@ Das gehört in jede Darstellung dieser Werte, nicht nur in diese Datei.
 (de-identifiziert), eine synthetische Verity-Datei, synthetische Messungen aus
 `praxis_gui/tools/generate_hrv_dataset.py` (Ruhe liegend/sitzend, Kohärenzatmung
 6/min) mit bekannter Bandleistung (`_truth.json`), zwei PhysioNet-NSR-Aufnahmen
-und seit 19.10.2026 eine synthetische 5000-s-Messung
+seit 19.10.2026 eine synthetische 5000-s-Messung
 (`scripts/fixture_synth_lang.py`), die den langen Spektralweg ab `LANG_AB_S`
-samt Randartefakt, Ketten, Nullen und Messlücke abdeckt (T6). Zu jeder Fixture
+samt Randartefakt, Ketten, Nullen und Messlücke abdeckt (T6), und seit 29.10.2026 eine
+synthetische Messung eines reinen Pulsgebers (`scripts/fixture_synth_bpm_only.py`,
+900 s ohne RR, Belastung, Erholung, Lücke, Marke `person/erholung`). Zu jeder Fixture
 liegt unter `tests/golden/trainingsapp/` die vollständige Referenzrechnung
 (`hrv_core.referenz`, Toleranz 1e-9, `tests/test_golden_trainingsapp.py`);
 Frequenzbereich, DFA α1 und SampEn sind zusätzlich gegen praxis_gui

@@ -163,7 +163,23 @@ class Recording:
 
     @property
     def dauer_s(self) -> float:
-        return self.beats[-1].t_s if self.beats else 0.0
+        """Dauer auf der Herzuhr; steht sie bei 0 (reiner Pulsgeber, keine RR), die Wanduhr.
+
+        Ein ``bpm_only``-Gerät schreibt nur ``hf_bpm``, die Herzuhr wächst nie — die Messung
+        hatte trotzdem eine Dauer (hrv-research, Entscheidung 16; Befund B2).
+        """
+        if not self.beats:
+            return 0.0
+        herz = self.beats[-1].t_s
+        if herz > 0:
+            return herz
+        return self.dauer_wanduhr_s
+
+    @property
+    def dauer_wanduhr_s(self) -> float:
+        """Wanduhrzeit des letzten Schlags (0, wenn keine Wanduhr vorliegt)."""
+        letzte = [b.t_wall_s for b in self.beats if b.t_wall_s is not None]
+        return max(0.0, float(letzte[-1])) if letzte else 0.0
 
     @property
     def hat_rr(self) -> bool:

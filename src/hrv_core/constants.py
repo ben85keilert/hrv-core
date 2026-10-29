@@ -220,3 +220,44 @@ QUALITAET_BPM_ONLY: Final[str] = "bpm_only"
 def malik_threshold(intervall_quelle: str) -> float:
     """Passende Ausreißerschwelle zur Intervallquelle."""
     return MALIK_THRESHOLD_PPI if intervall_quelle == QUELLE_PPG_PPI else MALIK_THRESHOLD_EKG
+
+
+# ---------------------------------------------------------------------------
+# Herzfrequenz (`herzfrequenz.py`, hrv-research Entscheidungen 11–16, 29.10.2026)
+# ---------------------------------------------------------------------------
+# Die HF rechnet auf der Wanduhr im festen Raster; Sekunden ohne Schlag werden bis
+# HF_LUECKE_S linear gefüllt (bei 40 bpm liegen 1,5 s zwischen zwei Schlägen).
+HF_RASTER_S: Final[float] = 1.0
+HF_LUECKE_S: Final[float] = 5.0
+#: Mindestabdeckung eines Rollfensters, damit sein Mittel zählt
+HF_FENSTER_ANTEIL: Final[float] = 0.8
+#: Artefaktanteil, ab dem Ruhe-HF und HFmax-Kandidat ungültig sind
+HF_ARTEFAKT_MAX: Final[float] = 0.05
+# INTERLIVE (schumann2025interlive): Ruhe-HF tiefstes 30-s-Rollmittel in ≥ 5 min liegend
+# (empfohlen 10 min); Nacht-HF tiefstes 2-h-Rollmittel in ≥ 4 h Schlaf; Tagesminimum
+# tiefstes 10-min-Rollmittel bei ≥ 10 h Daten; HFmax höchstes 30-s-Rollmittel.
+HF_RUHE_FENSTER_S: Final[float] = 30.0
+HF_RUHE_MIN_S: Final[float] = 300.0
+HF_NACHT_FENSTER_S: Final[float] = 7200.0
+HF_NACHT_MIN_S: Final[float] = 14400.0
+HF_TAG_FENSTER_S: Final[float] = 600.0
+HF_TAG_MIN_S: Final[float] = 36000.0
+#: Gültiger Tag für das Aktivitätsprofil (INTERLIVE: ≥ 16 h)
+HF_TAG_GUELTIG_S: Final[float] = 57600.0
+HF_MAX_FENSTER_S: Final[float] = 30.0
+#: Plateau: das Mittel der 30 s vor dem Kandidatenfenster erreicht diesen Anteil
+HF_MAX_PLATEAU: Final[float] = 0.8
+#: Kein Sprung über diesen Anteil zwischen zwei Zellen im Kandidatenfenster
+HF_MAX_SPRUNG: Final[float] = 0.3
+#: Gipfel eines Bezugs = höchstes Mittel über diese Dauer (keine Einzelsekunde)
+HF_GIPFEL_S: Final[float] = 5.0
+#: Erholung: HF_ende = Mittel der 5 s vor t0; HRR nach 30, 60, 120 s (T30 bewusst nicht)
+HF_ERHOLUNG_MITTEL_S: Final[float] = 5.0
+HF_ERHOLUNG_FENSTER_S: Final[tuple[int, ...]] = (30, 60, 120)
+#: Vorgeschlagene Abschnitte: Belastung ab 40 % HRR über ≥ 3 min, Ende nach 2 min darunter;
+#: Ruhephase ≥ 10 min; Schlafkandidat ≥ 4 h
+HF_BOUT_PROZENT: Final[float] = 40.0
+HF_BOUT_MIN_S: Final[float] = 180.0
+HF_BOUT_ENDE_S: Final[float] = 120.0
+HF_RUHE_MIN_S_PHASE: Final[float] = 600.0
+HF_SCHLAF_MIN_S: Final[float] = 14400.0
