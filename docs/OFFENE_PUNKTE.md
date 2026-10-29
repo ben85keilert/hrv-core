@@ -115,3 +115,52 @@ Wert, Leak, Last, **niedrig** = Wartung. „Bestätigt“ = nachgestellt.
 | D9 | `docs/hrv_algorithmen.md:109, 386-388, 575, 658-662, 695` | verweist auf `tests/test_korrektur_regeln.py` (gibt es hier nicht), auf `test_atmung_byteidentisch` (nur im Docstring, keine Testfunktion, `PRAXIS_GUI_PFAD` nirgends), auf einen Deckel „höchstens 2000 Minutenfenster“ (in `atmung.fenster/median` nicht vorhanden; 8 h → 1922 Fenster, 2,1 s; 24 h ≈ 5800), auf `tests/golden/rr/` (hier `tests/fixtures` + `tests/golden/trainingsapp`) und auf einen nk2-Vergleich in `tests/test_nichtlinear.py` (liegt in `tests/referenz`). — **erledigt** (2026-10-19, 8f640b3) |
 | D10 | `praxis_gui/docs/sensor_hrv.md`, hrv-core `docs/` | Feldreferenz raw-v1 kennt weder `uebungen`, `marke`, `datenqualitaet` noch `corrections_ppi`; hrv-core hat keinen eigenen Formatvertrag. Kompatibilität selbst ist gegeben (Felder optional, flach, praxis_gui behält sie; trainingsapp `kompatibilitaet.md` §4/§6a/§9b aktuell). — **erledigt** (2026-10-19, 8f640b3: docs/formate.md; Nachtrag in praxis_gui/docs/sensor_hrv.md am 19.10. abends, dort committet) |
 | D11 | `constants.py` | R8 weiter offen: `WELCH_OVERLAP`, `DFA_DETREND_BOX`, `RECOMMENDED_BEATS_FREQUENCY` ungenutzt; `SAMPEN_MAX_BEATS_LIVE` inzwischen in `spektralprofil.py:33` genutzt. — **erledigt** (2026-10-19, 8f640b3: drei Konstanten entfernt) |
+
+## Durchsicht 2026-10-22
+
+Nach den Commits `04e6110..5a3c97f` (Marken `person`/`leistung`/`abschluss`, Feld `adresse`,
+De-Identifizierung mit Adresserkennung, `korrektur_laden`/`korrekturstand`, Gerätedoku
+Decathlon/Beurer, `scripts/ble_erkundung.py`). Stand: 388 Tests grün (Golden 1e-9,
+Doctests), ruff sauber, kein ALGO-Sprung nötig (nur Komposition vorhandener Funktionen).
+Schwere wie am 19.10. „Bestätigt“ = nachgestellt (Skript lag im Scratchpad der Sitzung).
+Nichts behoben — Ben entscheidet. Gegenstück in trainingsapp `docs/offene_fragen.md` § 9.
+
+### Rechnung
+
+| # | Ort | Befund | Vorschlag |
+|---|---|---|---|
+| R24 | `korrektur.py:1074-1080` (`Korrekturstand.korrekturen/anwenden`), `:1083-1098` (`auswahl_aus`) | **`anwenden()` rechnet nicht die gespeicherten Korrekturen, sondern die Vorschläge der Ketten, die ein gespeicherter `beat_index` berührt.** Bestätigt: 100 Schläge, Artefakte bei 30 und 60, Sidecar `set_value 10→700`, `interpolate 30`, `exclude_range 55–70` → praxis_gui-Weg (`anwenden(rec, corrections)`, `analysis_session.py:244`) RMSSD 20,5 ms, `Korrekturstand.anwenden()` 127,8 ms — das 1700-ms-Artefakt bleibt roh, rr[10] 800 statt 700. `set_value` auf einem Schlag ohne Kette fällt weg, `exclude_range` zählt nur mit seinem Startindex (Ketten innerhalb bleiben roh), ein `delete` außerhalb einer Kette ebenso. Für die Auswertungsansicht der trainingsapp ist das der alte `_Zustand`-Weg (deren Sidecars entstehen aus Ketten), aber `ausdauer._hrv_laden` wandte bis trainingsapp 610b4b8 die Sidecar-Korrekturen direkt an — dort ein Rückschritt —, und `korrektur.md:367` verspricht „beide Apps lesen dieselbe Reihe“. **hoch** | `korrekturen()` = gespeicherte Korrekturen **plus** Vorschläge der übernommenen, nicht gespeicherten Ketten (oder gespeicherte unverändert durchreichen, Ketten nur zur Anzeige); Test mit praxis_gui-Sidecar (`set_value`, `exclude_range`) |
+| R25 | `korrektur.py:1142-1143` (`korrektur_laden`) | Bei veraltetem Sidecar (R16) werden dessen Korrekturen verworfen, seine **Regeln** (`analyse_regeln` ohne Prüfsummenblick: Malik, Grenzen, `sensor_verwerfung`, `vorauswahl`) bestimmen aber Basis und Vorschläge — der Test schreibt das fest (`alt.uebernommen == vorauswahl(alt.ketten, "sicher")`). Wie der alte App-Weg, aber inkonsequent gegenüber R16. **niedrig** | veraltet → auch Regeln aus der Vorgabe, oder bewusst dokumentieren |
+
+### Dateien und Formate
+
+| # | Ort | Befund | Vorschlag |
+|---|---|---|---|
+| F22 | `docs/geraete/decathlon/hrm_belt/erkundung_2026-10-19_befund.json:3`, `…_roh.jsonl:1`, `runbook_app_mitschnitt.md:49,60`; `docs/geraete/beurer_po60/*.md` (8× `C9:49:AC:1E:4B:00`); `docs/geraete/geraete.md:219` (`24:AC:AC:15:8D:1F`); Doctests `deid.py:270`, `recording.py:691`, trainingsapp `hrv_export.py:51`; `scripts/ble_erkundung.py:358,367` | Mit dem Umzug der Gerätedoku aus dem **privaten** praxis_gui ins **öffentliche** hrv-core stehen reale BLE-Adressen von Praxis-/Testgeräten im Netz; die Bibliothek nennt `adresse` selbst einen Pseudo-Identifikator und leert ihn in `deid`. Die Decathlon-MAC ist zudem das Beispiel in den Doctests. `ble_erkundung.py` schreibt die Adresse in Befund und Rohmitschnitt ohne Hinweis, sie vor dem Ablegen unter `docs/` zu streichen. Gerätekennung, keine Person — Bens Entscheidung. **mittel** | Adressen in der Doku maskieren (`AA:BB:…:00`), Doctest-Beispiele erfinden, Hinweis im Runbook und in `ble_erkundung.py` |
+| F23 | `deid.py:277-283` (`geraet_modell`) | Adresse wird nur als letztes Wort erkannt: `"E2:B4:CC:3F:08:44 HRM"` und eine MAC ohne Trenner als einziges Wort (`"E2B4CC3F0844"`, `_SERIENNUMMER` verlangt ≥ 2 Wörter) passieren ungemeldet (nachgestellt). Realistisch selten. Dazu: die trainingsapp ruft `deid` nirgends — ihr Export entfernt nur den Schlüssel `adresse`, Messdateien von vor dem 19.10. mit der MAC in `geraet` und Polar-Geräte-IDs („Polar H10 A1B2C3D4“) verlassen das Gerät (trainingsapp S16/P78). **niedrig** hier | Muster an jeder Wortposition; trainingsapp bindet `geraet_modell` im Export an |
+
+### Tests und Regeln
+
+| # | Ort | Befund | Vorschlag |
+|---|---|---|---|
+| T9 | `deid.py:355`, `ereignisse.py:452/459/464`, `korrektur.py:986/994/995` | mypy meldet 10 Fehler in 3 Dateien — alle aus Commits **vor** dem Bereich (f415963, 4da0444); mypy ist weder in `pyproject.toml` konfiguriert noch in `ci.yml`. Nur Stand. **niedrig** | mypy wie in trainingsapp konfigurieren und in die CI |
+
+### Doku
+
+| # | Ort | Befund |
+|---|---|---|
+| D12 | `docs/korrektur.md:360-366`; `korrektur.py:1018-1021` (`analyse_regeln`-Docstring), `:1109-1111` (`korrekturstand`-Docstring) | „ohne gespeicherte Regeln (praxis_gui) gilt die Vorauswahl“ stimmt nicht mehr: praxis_gui schreibt seit c306d68 `corrections_meta.regeln` immer, und `analyse_regeln` baut auch aus einem alten `corrections_meta` ohne `regeln` einen `Korrekturregeln`. Ein praxis_gui-Sidecar zählt nie als „ohne Regeln“; mit `corrections: []` gilt „Keine“ → roh. Ergebnis stimmig (praxis_gui rechnet dann ebenfalls roh), nur die Beschreibung ist falsch. **niedrig** |
+| D13 | `korrektur.py:519-521` (`_interpolationswerte`-Docstring: „praxis_gui tut das weiter“), `docs/VERGLEICH.md:82` („praxis_gui zeigt … ein Plateau“) | Widerspricht 5a3c97f (`korrektur.md:96-99`: praxis_gui rechnet über `anwenden`, kein Plateau mehr — stimmt, `analysis_session.py:244`). Der Code ist stimmig (`am_rand`, `_interpolationswerte` löscht ohne zwei Anker). **niedrig** |
+
+Geprüft und in Ordnung: raw-v1 `adresse` abwärtskompatibel (`to_dict` schreibt den
+Schlüssel nur, wenn gesetzt; alte Dateien byteidentisch; praxis_gui behält ihn beim
+Rückschreiben), Marken additiv (`marke_bereinigen` nur `MARKE_FELDER`, endliche Zahlen),
+`metadaten_schreiben` ersetzt nur `titel/notiz/ereignisse`; `docs/formate.md`,
+trainingsapp `kompatibilitaet.md` und praxis_gui `sensor_hrv.md` nachgezogen. deid:
+Weißliste je Format, rekursiv, `adresse` NULL, Sidecar ohne Adressfelder, Unbekanntes
+fällt weg; Meldungen `(art, pfad)` passen zu `deid_export.py`/`pruefe_daten.py`.
+`korrektur_laden`: Reihenfolge Regeln → Basis → Vorschläge → Sidecar → Auswahl
+zeilengleich mit dem alten `_Zustand`-Weg, „Keine“ = roh, veraltet → Vorauswahl, leere
+Messung → `None` ohne Ausnahme, Sidecar ohne `malik_threshold` ohne Absturz. Paket
+bleibt stdlib + numpy; `ble_erkundung.py` außerhalb, schreibt nur ins gitignorierte
+`ausgaben/`, liest 0x2A25 bewusst nicht; HR-Paketzerlegung korrekt.
