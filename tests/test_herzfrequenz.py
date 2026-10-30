@@ -378,6 +378,44 @@ def test_hierarchie_abgelaufen_nimmt_den_juengsten() -> None:
     assert hz.ProfilEintrag("hf_max", 1, "formel_nes", date(2026, 1, 1)).unsicherheit == 10.8
 
 
+# -- Schwellen aus DFA α1 (Entscheidung 20) -----------------------------------------
+
+
+def test_alpha1_schwelle_aus_rampe_und_ohne_durchgang() -> None:
+    rng = np.random.default_rng(7)
+    hf = np.linspace(90, 170, 81)
+    a1 = 1.65 - 0.008 * hf + rng.normal(0, 0.03, hf.size)  # 0,75 bei 112,5; 0,5 bei 143,75
+    s1 = hz.schwelle_alpha1(hf, a1)
+    s2 = hz.schwelle_alpha1(hf, a1, 0.5)
+    assert s1.gueltig and abs(s1.wert - 112.5) < 4 and s1.steigung < 0 and s1.r2 > 0.9
+    assert s2.gueltig and abs(s2.wert - 143.75) < 3 and s2.n >= 12
+    # Rampe endet vor dem Durchgang → ungültig, nicht extrapoliert
+    kurz = hz.schwelle_alpha1(hf[:45], a1[:45], 0.5)
+    assert not kurz.gueltig and any("durchläuft" in g for g in kurz.gruende)
+    # α1 steigt mit der HF (Unsinn) → ungültig ohne Wert
+    auf = hz.schwelle_alpha1(hf, a1[::-1])
+    assert not auf.gueltig and auf.wert is None
+    # Rauschen ohne Zusammenhang → r² zu klein
+    zufall = hz.schwelle_alpha1(hf, rng.uniform(0.5, 1.0, hf.size))
+    assert not zufall.gueltig and any("Streuung" in g for g in zufall.gruende)
+    d = s1.als_dict()
+    assert d["ziel"] == 0.75 and d["gueltig"] is True and d["gruende"] == []
+
+
+def test_alpha1_paare_weißes_rauschen_liegt_um_0_5() -> None:
+    rng = np.random.default_rng(11)
+    rr = 700 + rng.normal(0, 25, 900)
+    t = np.cumsum(rr) / 1000
+    te, hf, a1 = hz.alpha1_paare(t, rr, [False] * rr.size)
+    assert te.size > 20 and np.all(np.abs(hf - 60000 / 700) < 3)
+    assert 0.3 < float(np.median(a1)) < 0.7
+    # NaN (Artefakt) nimmt der Verlauf aus dem Fenster
+    rr_nan = rr.copy()
+    rr_nan[::2] = np.nan
+    te2, _, _ = hz.alpha1_paare(t, rr_nan, [False] * rr.size)
+    assert te2.size < te.size
+
+
 def test_hierarchie_am_stichtag_zaehlt_nichts_spaeteres() -> None:
     """Entscheidung 19: Ruhe-HF vom 5.10. und 15.10. — eine Messung vom 1.10. rechnet mit dem
     Wert vom 5.10., eine vom 10.10. mit dem vom 5.10., eine vom 20.10. mit dem vom 15.10."""

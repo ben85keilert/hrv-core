@@ -762,6 +762,18 @@ HF(VT1) = 4,866 + 0,405·HFpeak + 0,542·HFruhe, HF(VT2) = −2,606 + 0,773·HFp
 0,254·HFruhe, MAE 7,1 % / 5,0 % — nur mit **gemessener** Spitzen-HF; Beispiel Ruhe 55,
 Peak 185 → 110 / 154 bpm ≈ 42 / 76 % HRR.
 
+**Schwellen aus DFA α1** (`alpha1_paare`, `schwelle_alpha1`; Entscheidung 20,
+`rogers2021aerobic`, `rogers2021anaerobic`): α1 in gleitenden 2-min-Fenstern (Schritt 10 s,
+`trends.verlauf`, Skalen 4–16) gegen 60000 / Ø RR desselben Fensters; Artefakte gibt der
+Aufrufer als NaN mit. HRVT1 = HF beim Durchgang durch α1 = 0,75, HRVT2 durch 0,5 — je als
+Lösung der Geraden α1 = a + b·HF über die Fenster im Band Ziel ± 0,25 (Rogers: 1,0 … 0,5).
+Gültig nur mit ≥ 12 Fenstern im Band, α1 beidseits ≥ 0,05 über das Ziel hinaus (kein
+Extrapolieren), fallender Geraden und r² ≥ 0,5; sonst Wert mit Gründen, keine Schwelle. Die
+App rechnet das nur bei EKG-Gurten mit Artefaktanteil < 5 % (Rogers 2021: 1–3 % fehlende
+Schläge verschieben α1 messbar; optische Sensoren in Bewegung taugen nicht). Quelle
+`dfa_alpha1` rangiert hinter Labor und vor dem Talk-Test (objektiv statt Empfinden),
+Unsicherheit 6 bpm, 90 Tage gültig.
+
 **Bereiche.** `bereiche(modell, ruhe, hfmax, …)`: `drei` (42 / 77 % HRR), `acsm` (30 / 40 /
 60 / 90 %, Namen „sehr leicht … nahe maximal“ — Leitlinienbegriffe, kein Urteil), `cluster`
 (zehn gleich breite), `eigen` (bpm oder %, eigene Namen). Sonst heißen Bereiche
@@ -803,7 +815,7 @@ sonst (alles abgelaufen) der jüngste **bis zum Stichtag**, und liegt keiner dav
 älteste danach (Entscheidung 19: ein späterer Wert gilt nie rückwirkend, solange ein
 früherer da ist). Rangfolgen in `RANGFOLGE` (Ruhe-HF: Nacht ›
 Morgen 10 min › Morgen 5 min › Eintrag › Tagesminimum › Tagesfeld; HFmax: Spiroergometrie ›
-Ergometrie › Feld-Maximaltest › Feldmaximum › Eintrag › Formeln; Schwellen: Labor › Talk-Test
+Ergometrie › Feld-Maximaltest › Feldmaximum › Eintrag › Formeln; Schwellen: Labor › DFA α1 › Talk-Test
 › Milani › %HRR), Gültigkeit in `GUELTIG_TAGE` (Messungen 14 Tage, Eintrag 90, Tests ein
 Jahr, Formeln unbegrenzt), Vorgabe-Unsicherheiten in `UNSICHERHEIT_BPM`.
 `nenner_fortschreiben`: ein neuer Wert derselben Quelle ersetzt den Nenner erst ab 3 bpm

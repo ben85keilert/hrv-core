@@ -48,6 +48,13 @@ from typing import Any, Final
 import numpy as np
 
 from .constants import (
+    HF_ALPHA1_BAND,
+    HF_ALPHA1_FENSTER_S,
+    HF_ALPHA1_MIN_N,
+    HF_ALPHA1_MIN_R2,
+    HF_ALPHA1_RAND,
+    HF_ALPHA1_SCHRITT_S,
+    HF_ALPHA1_VT1,
     HF_ARTEFAKT_MAX,
     HF_BOUT_ENDE_S,
     HF_BOUT_MIN_S,
@@ -74,6 +81,7 @@ from .constants import (
     RR_MIN_MS,
 )
 from .recording import Beat
+from .trends import verlauf as _verlauf
 
 # ---------------------------------------------------------------------------
 # Quellen je Sekunde
@@ -705,6 +713,157 @@ def schwellen_milani(hf_peak: float, hf_ruhe: float) -> Schwellen:
 
 
 # ---------------------------------------------------------------------------
+# Schwellen aus DFA α1 (Entscheidung 20)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Alpha1Schwelle:
+    """HF beim Durchgang von DFA α1 durch ``ziel`` — HRVT1 (0,75) oder HRVT2 (0,5) nach
+    Rogers et al. 2021. ``wert`` ist None, wenn die Regression nichts hergibt; ``gueltig``
+    sagt, ob alle Bedingungen erfüllt sind, ``gruende`` nennt, was fehlt."""
+
+    ziel: float
+    wert: float | None
+    n: int
+    r2: float | None
+    steigung: float | None
+    alpha1_min: float | None
+    alpha1_max: float | None
+    hf_von: float | None
+    hf_bis: float | None
+    gueltig: bool
+    gruende: list[str] = field(default_factory=list)
+
+    def als_dict(self) -> dict[str, Any]:
+        return {
+            "ziel": self.ziel,
+            "wert": self.wert,
+            "n": self.n,
+            "r2": self.r2,
+            "steigung": self.steigung,
+            "alpha1_min": self.alpha1_min,
+            "alpha1_max": self.alpha1_max,
+            "hf_von": self.hf_von,
+            "hf_bis": self.hf_bis,
+            "gueltig": self.gueltig,
+            "gruende": list(self.gruende),
+        }
+
+
+def alpha1_paare(
+    t: Sequence[float] | np.ndarray,
+    rr_ms: Sequence[float] | np.ndarray,
+    naht: Sequence[bool] | np.ndarray,
+    *,
+    fenster_s: float = HF_ALPHA1_FENSTER_S,
+    schritt_s: float = HF_ALPHA1_SCHRITT_S,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(t_ende, hf_bpm, alpha1)`` je gleitendem Fenster: α1 (`trends.verlauf`, Skalen
+    4–16) und 60000 / Ø RR desselben Fensters. Artefakte gibt der Aufrufer als NaN in
+    ``rr_ms`` mit — sie fallen aus dem Fenster, wie Kubios sie ersetzt hätte, tut das hier
+    niemand (siehe `nonlinear.compute_dfa_alpha1`).
+
+    >>> rng = np.random.default_rng(3)
+    >>> rr = 800 + rng.normal(0, 30, 600)
+    >>> t = np.cumsum(rr) / 1000
+    >>> te, hf, a1 = alpha1_paare(t, rr, [False] * 600, fenster_s=120, schritt_s=30)
+    >>> te.size > 5, bool(np.all((hf > 70) & (hf < 80))), bool(np.all((a1 > 0.2) & (a1 < 0.9)))
+    (True, True, True)
+    """
+    a1 = dict(_verlauf(t, rr_ms, naht, "dfa_alpha1", fenster_s, schritt_s=schritt_s))
+    hf = dict(_verlauf(t, rr_ms, naht, "hf_rr", fenster_s, schritt_s=schritt_s))
+    gemeinsam = sorted(set(a1) & set(hf))
+    return (
+        np.asarray(gemeinsam, dtype=float),
+        np.asarray([hf[k] for k in gemeinsam], dtype=float),
+        np.asarray([a1[k] for k in gemeinsam], dtype=float),
+    )
+
+
+def schwelle_alpha1(
+    hf_bpm: Sequence[float] | np.ndarray,
+    alpha1: Sequence[float] | np.ndarray,
+    ziel: float = HF_ALPHA1_VT1,
+    *,
+    band: float = HF_ALPHA1_BAND,
+    rand: float = HF_ALPHA1_RAND,
+    min_n: int = HF_ALPHA1_MIN_N,
+    min_r2: float = HF_ALPHA1_MIN_R2,
+) -> Alpha1Schwelle:
+    """HF beim Durchgang von α1 durch ``ziel`` — Gerade α1 = a + b·HF über die Fenster im
+    Band ``ziel ± band`` (Rogers 2021: 1,0 … 0,5 für HRVT1), Lösung bei α1 = ``ziel``.
+
+    Gültig, wenn ≥ ``min_n`` Fenster im Band liegen, α1 darin beidseits um ≥ ``rand`` über
+    das Ziel hinausreicht (der Durchgang ist abgedeckt, nicht extrapoliert), die Gerade fällt
+    und r² ≥ ``min_r2``. Ungültig heißt: Wert mit Gründen, keine Schwelle.
+
+    >>> hf = np.linspace(100, 180, 41)
+    >>> a1 = 1.9 - 0.01 * hf              # 0,75 bei 115 bpm, 0,5 bei 140 bpm
+    >>> s = schwelle_alpha1(hf, a1)
+    >>> round(s.wert), s.gueltig, round(s.r2, 3)
+    (115, True, 1.0)
+    >>> round(schwelle_alpha1(hf, a1, 0.5).wert)
+    140
+    >>> schwelle_alpha1(hf[:8], a1[:8]).gruende
+    ['zu wenige Fenster im Band (8, nötig 12)']
+    """
+    h = np.asarray(hf_bpm, dtype=float)
+    a = np.asarray(alpha1, dtype=float)
+    gut = np.isfinite(h) & np.isfinite(a)
+    im_band = gut & (a >= ziel - band) & (a <= ziel + band)
+    n = int(im_band.sum())
+    gruende: list[str] = []
+    if n < min_n:
+        gruende.append(f"zu wenige Fenster im Band ({n}, nötig {min_n})")
+        return Alpha1Schwelle(ziel, None, n, None, None, None, None, None, None, False, gruende)
+    hb, ab = h[im_band], a[im_band]
+    a_min, a_max = float(ab.min()), float(ab.max())
+    if a_min > ziel - rand or a_max < ziel + rand:
+        gruende.append(f"α1 durchläuft {ziel:g} nicht ({a_min:.2f}–{a_max:.2f})")
+    if np.ptp(hb) < 1e-9:
+        gruende.append("HF ändert sich nicht")
+        return Alpha1Schwelle(
+            ziel,
+            None,
+            n,
+            None,
+            None,
+            a_min,
+            a_max,
+            float(hb.min()),
+            float(hb.max()),
+            False,
+            gruende,
+        )
+    b, c = np.polyfit(hb, ab, 1)
+    geschaetzt = c + b * hb
+    rest = float(((ab - geschaetzt) ** 2).sum())
+    gesamt = float(((ab - ab.mean()) ** 2).sum())
+    r2 = 1.0 - rest / gesamt if gesamt > 0 else None
+    if b >= 0:
+        gruende.append("α1 fällt nicht mit der HF")
+        wert = None
+    else:
+        wert = float((ziel - c) / b)
+    if r2 is None or r2 < min_r2:
+        gruende.append(f"Streuung zu groß (r² {0.0 if r2 is None else r2:.2f}, nötig {min_r2:g})")
+    return Alpha1Schwelle(
+        ziel,
+        wert,
+        n,
+        None if r2 is None else float(r2),
+        float(b),
+        a_min,
+        a_max,
+        float(hb.min()),
+        float(hb.max()),
+        not gruende,
+        gruende,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Bereiche
 # ---------------------------------------------------------------------------
 
@@ -730,6 +889,7 @@ ACSM_NAMEN: Final[tuple[str, ...]] = (
 #: Unsicherheit einer Grenze in % HRR nach Herkunft (Entscheidung 13)
 GRENZE_UNSICHERHEIT_PROZENT: Final[dict[str, float]] = {
     "labor": 2.5,
+    "dfa_alpha1": 5.0,
     "talk_test": 5.0,
     "milani": 6.0,
     "prozent_hrr": 6.0,
@@ -1319,8 +1479,15 @@ RANGFOLGE: Final[dict[str, tuple[str, ...]]] = {
         "formel_tanaka",
         "formel_gulati",
     ),
-    GROESSE_VT1: ("spiroergometrie", "laktat", "talk_test", "schaetzung_milani", "prozent_hrr"),
-    GROESSE_VT2: ("spiroergometrie", "laktat", "schaetzung_milani", "prozent_hrr"),
+    GROESSE_VT1: (
+        "spiroergometrie",
+        "laktat",
+        "dfa_alpha1",
+        "talk_test",
+        "schaetzung_milani",
+        "prozent_hrr",
+    ),
+    GROESSE_VT2: ("spiroergometrie", "laktat", "dfa_alpha1", "schaetzung_milani", "prozent_hrr"),
 }
 #: Gültigkeit in Tagen je Quelle; None = unbegrenzt
 GUELTIG_TAGE: Final[dict[str, int | None]] = {
@@ -1338,6 +1505,7 @@ GUELTIG_TAGE: Final[dict[str, int | None]] = {
     "formel_tanaka": None,
     "formel_gulati": None,
     "laktat": 365,
+    "dfa_alpha1": 90,
     "talk_test": 90,
     "schaetzung_milani": None,
     "prozent_hrr": None,
@@ -1358,6 +1526,7 @@ UNSICHERHEIT_BPM: Final[dict[str, float]] = {
     "formel_tanaka": FORMELN["tanaka"][2],
     "formel_gulati": FORMELN["gulati"][2],
     "laktat": 3.0,
+    "dfa_alpha1": 6.0,
     "talk_test": 6.0,
     "schaetzung_milani": 8.0,
     "prozent_hrr": 8.0,
@@ -1374,6 +1543,7 @@ MESSENDE_QUELLEN: Final[frozenset[str]] = frozenset(
         "test_maximal",
         "feldmaximum",
         "laktat",
+        "dfa_alpha1",
         "talk_test",
     }
 )
@@ -1505,6 +1675,7 @@ __all__ = [
     "RANGFOLGE",
     "UNSICHERHEIT_BPM",
     "Aktivitaetsprofil",
+    "Alpha1Schwelle",
     "Baseline",
     "Bereich",
     "Drift",
@@ -1516,6 +1687,7 @@ __all__ = [
     "ProfilEintrag",
     "Schwellen",
     "aktivitaetsprofil",
+    "alpha1_paare",
     "auf_raster",
     "baseline",
     "bereich_index",
@@ -1541,6 +1713,7 @@ __all__ = [
     "ruhe_hf_morgen",
     "ruhephasen",
     "schlaf_kandidat",
+    "schwelle_alpha1",
     "schwelle_belastung",
     "schwellen_milani",
     "tagesminimum",

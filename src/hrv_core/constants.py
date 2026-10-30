@@ -261,3 +261,15 @@ HF_BOUT_MIN_S: Final[float] = 180.0
 HF_BOUT_ENDE_S: Final[float] = 120.0
 HF_RUHE_MIN_S_PHASE: Final[float] = 600.0
 HF_SCHLAF_MIN_S: Final[float] = 14400.0
+# Schwellen aus DFA α1 (Rogers et al. 2021, Entscheidung 20): α1 in gleitenden 2-min-Fenstern
+# gegen die HF des Fensters; HRVT1 beim Durchgang durch 0,75, HRVT2 durch 0,5. Die Regression
+# nimmt die Fenster im Band ± 0,25 um das Ziel; gültig ab 12 Fenstern, r² ≥ 0,5, fallendem α1
+# und einem Durchgang, der beidseits um ≥ 0,05 abgedeckt ist. Nur EKG-Gurte, Artefakte < 5 %.
+HF_ALPHA1_VT1: Final[float] = 0.75
+HF_ALPHA1_VT2: Final[float] = 0.5
+HF_ALPHA1_BAND: Final[float] = 0.25
+HF_ALPHA1_RAND: Final[float] = 0.05
+HF_ALPHA1_MIN_N: Final[int] = 12
+HF_ALPHA1_MIN_R2: Final[float] = 0.5
+HF_ALPHA1_FENSTER_S: Final[float] = 120.0
+HF_ALPHA1_SCHRITT_S: Final[float] = 10.0
