@@ -123,6 +123,8 @@ class Aufnahme:
         self.titel = ""
         self.notiz = ""
         self.batterie_prozent: int | None = None
+        #: Lief parallel ein EKG-Rohstrom (Beiwerk ``_ecg.json``, `ekg.EkgSammler`)?
+        self.ecg_aufzeichnung = False
         self.patient_id: int | None = None
         self.behandlung_id: int | None = None
         # Lokales Datum wie bei praxis_gui (`datetime.now()`), nicht das UTC-Datum.
@@ -233,6 +235,7 @@ class Aufnahme:
             ereignisse=[dict(e) for e in self.ereignisse],
             datum=self.datum,
             ppg_aufzeichnung=False,
+            ecg_aufzeichnung=bool(self.ecg_aufzeichnung),
             ppi_pakete=[dict(p) for p in self._ppi_pakete] if self._ppi else None,
         )
 

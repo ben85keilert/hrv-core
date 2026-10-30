@@ -92,7 +92,7 @@ vorhandenes Sidecar wird **fortgeschrieben**, fremde Felder (praxis_gui) bleiben
 | Format | Datei | hrv-core |
 |---|---|---|
 | `truth-v1` | `sensor_*_truth.json` | Sollwerte des Generators — `deid.TRUTH_REGELN`, Golden-Tests |
-| EKG | `sensor_*_ecg.json` | `sample_rate_hz`, `uv[]`, `gaps`, `frame_offsets`, `frame_sample_counts` — nur `deid` |
+| EKG | `sensor_*_ecg.json` | `sample_rate_hz`, `uv[]`, `gaps`, `frame_offsets`, `frame_sample_counts` (praxis_gui); seit 30.10.2026 schreibt es auch die trainingsapp (`ekg.EkgSammler`, Polar H10 PMD 130 Hz, nur auf Wunsch) mit `frame_t_ns[]`, `t_wall_start_s`, `batterie[]`, `gaps[]` aus der Gerätezeit; `ekg.ekg_laden` liest beides; Journal `.backup_<ts>_ecg.jsonl` neben dem Crash-Backup |
 | PPG | `sensor_*_ppg.json` | `sample_rate_hz`, `kanaele`, `kanal_namen`, `werte[]`, … — nur `deid` |
 | `sitzung-v1` | `Messungen/Sitzungen/sitzung_*.json` | Mehrgeräte-Sitzung aus praxis_gui: `teilnehmer[]` mit `geraet`, `adresse` (BLE-MAC, `deid` leert), `geraet_profil`, `intervall_quelle`, `ordner`, `datei`, `n_schlaege` — nur `deid` |
 

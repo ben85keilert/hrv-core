@@ -177,6 +177,11 @@ ECG_REGELN: dict[str, Any] = {
         "uv",
         "frame_offsets",
         "frame_sample_counts",
+        # Erweiterungen der trainingsapp (`ekg.py`): Gerätezeit je Rahmen, Wanduhr der
+        # ersten Probe, Akkustand im Verlauf — nichts davon ist personenbezogen
+        "frame_t_ns",
+        "t_wall_start_s",
+        "batterie",
     )
 }
 PPG_REGELN: dict[str, Any] = {
