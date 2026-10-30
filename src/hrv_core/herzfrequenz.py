@@ -1432,8 +1432,10 @@ def geltender_wert(
 
     1. ein **festgesetzter** Eintrag (jüngster), sonst
     2. aus der genauesten Quelle, die einen gültigen Eintrag hat, der **jüngste**; sonst
-    3. wenn kein Eintrag mehr gültig ist: der jüngste überhaupt (mit Vorbehalt des Alters —
-       besser ein alter Messwert als keiner; die App zeigt das Datum).
+    3. wenn kein Eintrag mehr gültig ist: der jüngste **bis zum Stichtag** (mit Vorbehalt des
+       Alters — besser ein alter Messwert als keiner; die App zeigt das Datum); liegt keiner
+       davor, der älteste danach (Entscheidung 19: eine Messung vor dem ersten Eintrag rechnet
+       mit dem ersten Wert, nie mit einem späteren, wenn ein früherer da ist).
 
     >>> from datetime import date
     >>> e = [ProfilEintrag("ruhe_hf", 58, "eintrag", date(2026, 10, 1)),
@@ -1443,6 +1445,8 @@ def geltender_wert(
     'nacht'
     >>> geltender_wert(e, "ruhe_hf", date(2026, 11, 20)).quelle   # Nacht abgelaufen
     'eintrag'
+    >>> geltender_wert(e[1:], "ruhe_hf", date(2026, 10, 5)).wert  # vor allen Einträgen
+    52
     """
     passend = [e for e in eintraege if e.groesse == groesse]
     if not passend:
@@ -1452,7 +1456,10 @@ def geltender_wert(
         return max(feste, key=lambda e: e.datum)
     gueltige = [e for e in passend if gueltig_am(e, heute)]
     if not gueltige:
-        return max(passend, key=lambda e: e.datum)
+        davor = [e for e in passend if e.datum <= heute]
+        if davor:
+            return max(davor, key=lambda e: e.datum)
+        return min(passend, key=lambda e: e.datum)
     return min(gueltige, key=lambda e: (rang(groesse, e.quelle), -e.datum.toordinal()))
 
 

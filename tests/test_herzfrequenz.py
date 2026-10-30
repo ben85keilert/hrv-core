@@ -376,6 +376,21 @@ def test_hierarchie_abgelaufen_nimmt_den_juengsten() -> None:
     assert hz.gueltig_am(formel[-1], date(2030, 1, 1))
     assert not hz.gueltig_am(e[0], date(2026, 1, 1))
     assert hz.ProfilEintrag("hf_max", 1, "formel_nes", date(2026, 1, 1)).unsicherheit == 10.8
+
+
+def test_hierarchie_am_stichtag_zaehlt_nichts_spaeteres() -> None:
+    """Entscheidung 19: Ruhe-HF vom 5.10. und 15.10. — eine Messung vom 1.10. rechnet mit dem
+    Wert vom 5.10., eine vom 10.10. mit dem vom 5.10., eine vom 20.10. mit dem vom 15.10."""
+    e = [
+        hz.ProfilEintrag("ruhe_hf", 56, "messung_morgen_5", date(2026, 10, 5)),
+        hz.ProfilEintrag("ruhe_hf", 52, "messung_morgen_5", date(2026, 10, 15)),
+    ]
+    assert hz.geltender_wert(e, "ruhe_hf", date(2026, 10, 1)).wert == 56
+    assert hz.geltender_wert(e, "ruhe_hf", date(2026, 10, 10)).wert == 56
+    assert hz.geltender_wert(e, "ruhe_hf", date(2026, 10, 20)).wert == 52
+    # beide abgelaufen (14 Tage): der jüngste bis zum Stichtag, nicht ein späterer
+    spaeter = [*e, hz.ProfilEintrag("ruhe_hf", 49, "messung_morgen_5", date(2026, 12, 1))]
+    assert hz.geltender_wert(spaeter, "ruhe_hf", date(2026, 11, 10)).wert == 52
     assert hz.ProfilEintrag("hf_max", 1, "ergometrie", date(2026, 1, 1)).misst
 
 

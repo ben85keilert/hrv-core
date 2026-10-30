@@ -799,7 +799,9 @@ Breite, kein Pfeil.
 
 **Wertehierarchie** (Entscheidung 11, `geltender_wert`): Für eine Größe gilt der
 **festgesetzte** Eintrag, sonst aus der genauesten Quelle mit gültigem Eintrag der jüngste,
-sonst (alles abgelaufen) der jüngste überhaupt. Rangfolgen in `RANGFOLGE` (Ruhe-HF: Nacht ›
+sonst (alles abgelaufen) der jüngste **bis zum Stichtag**, und liegt keiner davor, der
+älteste danach (Entscheidung 19: ein späterer Wert gilt nie rückwirkend, solange ein
+früherer da ist). Rangfolgen in `RANGFOLGE` (Ruhe-HF: Nacht ›
 Morgen 10 min › Morgen 5 min › Eintrag › Tagesminimum › Tagesfeld; HFmax: Spiroergometrie ›
 Ergometrie › Feld-Maximaltest › Feldmaximum › Eintrag › Formeln; Schwellen: Labor › Talk-Test
 › Milani › %HRR), Gültigkeit in `GUELTIG_TAGE` (Messungen 14 Tage, Eintrag 90, Tests ein
