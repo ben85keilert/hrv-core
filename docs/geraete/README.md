@@ -49,12 +49,34 @@ in [`ble_uebertragung_pruefen.md`](ble_uebertragung_pruefen.md).
 
 ## Gerätewissen als Code
 
-Seit 0.6.0 (4.11.2026) liegt, was ohne Bluetooth geht, in `hrv_core.geraete`: zuerst
-`geraete.pmd` (Polar Measurement Data — EKG, PPI, Beschleunigung, Einstellungen,
-Merkmalsliste). Der gemeinsame Rohmitschnitt aller Apps ist `hrv_core.mitschnitt`
-(`mitschnitt-v1`, `docs/formate.md`): Aus Mitschnitten entsteht der Dekoder eines neuen
-Geräts. Geplant (Plan Diagnosemodus der trainingsapp, Stufe 7): Profile und Treiber je Gerät
-mit Reifegrad *erkannt* → *Prototyp* (Dekoder an einer Geräteprobe getestet) → *geprüft*
-(gegen den H10 nach `ble_uebertragung_pruefen.md`) → *empfohlen*. Geräteproben anderer
-Personen kommen nie ins Repo (Ben, 4.11.2026, P115) — hier landen nur der Treiber und
-synthetische Nachbauten nach dem entschlüsselten Protokoll.
+Seit 0.6.0 (4.11.2026) liegt, was ohne Bluetooth geht, in `hrv_core.geraete`:
+
+- `geraete.pmd` — Polar Measurement Data (EKG, PPI, Beschleunigung, Einstellungen, Merkmalsliste);
+- `geraete.gatt` — Namen der Standarddienste und -merkmale, Dekoder 0x2A37 und Akkustand;
+- `geraete.treiber` — je Gerät Erkennung, Ströme und Reifegrad (seit 0.7.0).
+
+Der gemeinsame Rohmitschnitt aller Apps ist `hrv_core.mitschnitt` (`mitschnitt-v1`,
+`docs/formate.md`); aus Mitschnitten entsteht der Dekoder eines neuen Geräts.
+
+**Reifegrade** (die trainingsapp zeigt sie im Sensorblatt und in der Gerätesuche):
+
+| Reifegrad | heißt | Beispiel |
+|---|---|---|
+| erkannt | Dienste bekannt, nur Standardströme, nicht eigens geprüft | Polar H9, Gurte nach Standardprofil |
+| Prototyp | Dekoder an einer Geräteprobe getestet | — |
+| geprüft | an zwei Geräten oder zwei Personen gegen den H10 geprüft (`ble_uebertragung_pruefen.md`) | Verity Sense |
+| empfohlen | geprüft und als Referenz oder für HRV geeignet | Polar H10 |
+
+**Weg einer Geräteprobe zum Treiber:**
+
+1. Im Diagnosemodus der trainingsapp das Gerät ohne Messung roh mitschneiden (Geräte suchen →
+   „Rohmitschnitt“) und die **Geräteprobe** teilen — als Datei, kein Hochladen aus der App.
+2. Die Probe bleibt bei Ben; **Proben anderer Personen kommen nie in ein Repo** (Ben, 4.11.2026,
+   P115) — sie dienen lokal der Entschlüsselung und Korrekturrechnung.
+3. Befund unter `docs/geraete/<gerät>/` (wie Decathlon, Beurer) nach
+   [`VORLAGE_NEUES_GERAET.md`](VORLAGE_NEUES_GERAET.md).
+4. Treiber in `geraete/treiber.py` als *Prototyp*, Test an einem **synthetischen Nachbau** nach
+   dem entschlüsselten Protokoll (nie an der Probe selbst, wenn sie nicht Bens eigene ist).
+5. Mit der Prüfung gegen den H10 steigt der Reifegrad; die Apps heben `hrv-core.ref`.
+
+Eine Eingangsvorlage für die Community gibt es erst nach rechtlicher Klärung (P115).

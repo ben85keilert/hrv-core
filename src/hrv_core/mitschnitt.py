@@ -60,7 +60,7 @@ from typing import Any, TextIO
 
 import numpy as np
 
-from .geraete import pmd
+from .geraete import gatt, pmd
 
 FORMAT: str = "mitschnitt-v1"
 #: Endung neben der Messdatei: ``sensor_<ts>_mitschnitt.jsonl``
@@ -109,15 +109,14 @@ KONTEXT_WAS = (
     "diagnose_ende",
 )
 
-_BT = "-0000-1000-8000-00805f9b34fb"
-HR_MEASUREMENT_UUID = "00002a37" + _BT
-BATTERY_LEVEL_UUID = "00002a19" + _BT
+_BT = gatt.BASIS
+HR_MEASUREMENT_UUID = gatt.HR_MEASUREMENT_UUID
+BATTERY_LEVEL_UUID = gatt.BATTERY_LEVEL_UUID
 #: Gerätename (GAP), Systemkennung, Seriennummer — tragen eine Kennung des einzelnen Geräts.
-#: Die Apps lesen 0x2A25 und 0x2A23 nie; `hrv_core.deid` entfernt Zeilen aller drei.
-KENNUNGS_MERKMALE: frozenset[str] = frozenset(
-    {"00002a00" + _BT, "00002a23" + _BT, "00002a25" + _BT}
-)
-NIE_LESEN: frozenset[str] = frozenset({"00002a23" + _BT, "00002a25" + _BT})
+#: Die Apps lesen 0x2A25 und 0x2A23 nie (`gatt.NIE_LESEN`); `hrv_core.deid` entfernt Zeilen
+#: aller drei.
+KENNUNGS_MERKMALE: frozenset[str] = frozenset({gatt.uuid16(0x2A00), *gatt.NIE_LESEN})
+NIE_LESEN: frozenset[str] = gatt.NIE_LESEN
 #: Geräteinformation, die gelesen werden darf (ohne Seriennummer und Systemkennung)
 GERAETEINFO: dict[str, str] = {
     "hersteller": "00002a29" + _BT,
