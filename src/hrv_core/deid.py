@@ -279,6 +279,8 @@ MITSCHNITT_REGELN: dict[str, dict[str, Any]] = {
         "start_utc": KEEP,
         "wall_ns": KEEP,
         "messdatei": KEEP,
+        # Nullpunkt der Aufnahme auf der Uhr der Zeilen: t_wall_s = (t − start_mono_ns) / 1e9
+        "aufnahme": {"start_mono_ns": KEEP, "start_utc": KEEP},
         "geraet": {
             "name": GERAET,
             "id": ADRESSE,
@@ -341,6 +343,12 @@ MITSCHNITT_REGELN: dict[str, dict[str, Any]] = {
         "dauer_s": KEEP,
         "phase": KEEP,
         "art_marke": KEEP,
+        # wie die Marke im Ereignis der Messdatei (Vertrag §4): Plan, Runde, Timer-Profil
+        "plan": FREITEXT,
+        "runde": KEEP,
+        "von": KEEP,
+        "profil": KEEP,
+        "soll_s": KEEP,
     },
 }
 

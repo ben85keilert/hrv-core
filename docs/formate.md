@@ -103,7 +103,7 @@ später praxis_gui (`rohlog`). JSON Lines, nur angehängt, jede Zeile `{"art": �
 
 | `art` | Felder |
 |---|---|
-| `kopf` | `format` (`mitschnitt-v1`), `app`, `version`, `plattform`, `start_utc`, `wall_ns`, `messdatei`, `geraet` {`name`, `id` (Adresse), `profil`, `art`, `info`}, `stroeme` (gewählt, mit Einstellungen, etwa `{"acc": {"rate_hz": 200, "bereich_g": 8}}`), `dienste` (Abbild), `marken` |
+| `kopf` | `format` (`mitschnitt-v1`), `app`, `version`, `plattform`, `start_utc`, `wall_ns`, `messdatei`, `aufnahme` {`start_mono_ns`: Nullpunkt der Messung auf der Uhr der Zeilen, `t_wall_s = (t − start_mono_ns)/1e9`; `start_utc`} (seit 0.6.1), `geraet` {`name`, `id` (Adresse), `profil`, `art`, `info`}, `stroeme` (gewählt, mit Einstellungen, etwa `{"acc": {"rate_hz": 200, "bereich_g": 8}}`), `dienste` (Abbild), `marken` |
 | `n` | Benachrichtigung: `c` Merkmal (Kürzel `hr`, `pmd_ctrl`, `pmd_data`, `akku`, `info_*` oder UUID), `x` Hex, vom Transport `s` (Folgenummer), `tm` (µs, monotone Uhr der Dart-Seite), `tw` (µs, Wanduhr der Dart-Seite) |
 | `w` | Kommando: `c`, `x`, `a` (mit Antwort) |
 | `r` | Lesen: `c`, `x` oder `fehler` |
@@ -112,7 +112,7 @@ später praxis_gui (`rohlog`). JSON Lines, nur angehängt, jede Zeile `{"art": �
 | `probe` | `akku`, `akku_handy`, `laedt`, `bildschirm`, `verzug_ms`, `verzug_spitze_ms`, `pakete`, `mb` |
 | `marke` | `id` (laufend je Datei), `typ` (`wdh`, `atem`, `stoerung`, `marke`), `quelle` (`handy`, `uhr`), `nr` (im Satz), `tm`, `kontext` {`uebung`, `uebung_id`, `satz`, `phase`, `feld`} |
 | `marke_weg` | `id` — nimmt eine Marke zurück; gelöscht wird nie |
-| `kontext` | `was` (`uebung_start`, `uebung_ende`, `timer_*`, `satz`, `pause`, `diagnose_start`, `diagnose_ende`), `uebung`, `uebung_id`, `satz`, `feld`, `wert`, `abschnitt`, `dauer_s`, `phase`, `art_marke` |
+| `kontext` | `was` (`uebung_start`, `uebung_ende`, `timer_*`, `satz`, `pause`, `diagnose_start`, `diagnose_ende`), `uebung`, `uebung_id`, `satz`, `feld`, `wert`, `abschnitt`, `dauer_s`, `phase`, `art_marke`; seit 0.6.1 `plan`, `runde`, `von`, `profil`, `soll_s` (wie die Marke im Ereignis der Messdatei) |
 
 - **Schreiben:** jede Zeile sofort geschrieben und geflusht, `fsync` höchstens alle 5 s;
   endet die Datei beim Öffnen mitten in einer Zeile, beginnt der Anhang mit einem

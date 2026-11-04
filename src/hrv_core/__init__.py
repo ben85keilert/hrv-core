@@ -11,7 +11,7 @@ hrv-research ($HRV_TESTDATA, vorher scripts/pruefe_daten.py).
 Algorithmen: docs/hrv_algorithmen.md, Korrekturregeln: docs/korrektur.md.
 """
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 from .artifacts import clean_rr
 from .aufnahme import Aufnahme

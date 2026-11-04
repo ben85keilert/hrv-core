@@ -280,3 +280,15 @@ def test_adressen_im_text_aber_keine_uhrzeiten_und_dienste() -> None:
     )
     uuid = "fb005c81-02e7-f387-1cad-8acd2d8df0c8"
     assert deid.adressen_maskieren(uuid) == uuid
+
+
+def test_nullpunkt_der_aufnahme_bleibt_beim_deid(tmp_path) -> None:
+    pfad = tmp_path / "a_mitschnitt.jsonl"
+    s = mitschnitt.Schreiber(pfad, {"aufnahme": {"start_mono_ns": 10**9, "start_utc": "x"}})
+    s.marke(mitschnitt.MARKE_WDH, t=4 * 10**9)
+    s.schliessen()
+    m = mitschnitt.laden(pfad)
+    assert m.aufnahme_start_ns == 10**9 and m.wanduhr_s(m.marken()[0]["t"]) == 3.0
+    meldungen: list = []
+    (kopf, *_rest) = list(deid.mitschnitt_zeilen(mitschnitt.lesen(pfad), meldungen))
+    assert kopf["aufnahme"] == {"start_mono_ns": 10**9, "start_utc": "x"} and not meldungen

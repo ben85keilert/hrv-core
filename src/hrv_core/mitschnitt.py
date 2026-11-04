@@ -10,7 +10,8 @@ wie die Ankunftszeit der Messwerte). Die Arten:
 ``kopf``      erste Zeile: ``format``, ``app``, ``version``, ``start_utc``, ``wall_ns``,
               ``geraet`` (``name``, ``id`` = Adresse maskiert, ``profil``, ``art``), ``stroeme``
               (gewählte Ströme und Einstellungen), ``dienste`` (Abbild der Dienste),
-              ``messdatei``
+              ``messdatei``, ``aufnahme`` (``start_mono_ns``: Nullpunkt der Messung auf der
+              Uhr der Zeilen — ``t_wall_s = (t − start_mono_ns) / 1e9``, `wanduhr_s`)
 ``n``         Benachrichtigung: ``c`` Merkmal (Kürzel oder UUID), ``x`` Hex; vom Transport, wenn
               er sie kennt: ``s`` Folgenummer, ``tm`` monotone Uhr der Dart-Seite (µs), ``tw``
               Wanduhr der Dart-Seite (µs)
@@ -476,6 +477,24 @@ class Mitschnitt:
             and isinstance(z.get("t"), int)
             and isinstance(z.get("wall_ns"), int)
         ]
+
+    @property
+    def aufnahme_start_ns(self) -> int | None:
+        """Nullpunkt der Messung (``kopf.aufnahme.start_mono_ns``) — ``None`` ohne Messung."""
+        a = self.kopf.get("aufnahme")
+        wert = a.get("start_mono_ns") if isinstance(a, dict) else None
+        return int(wert) if isinstance(wert, int) else None
+
+    def wanduhr_s(self, t_ns: int) -> float | None:
+        """Eine Zeit der Zeilen auf der Wanduhr der Messdatei (``t_wall_s``) — ``None`` ohne
+        Nullpunkt im Kopf.
+
+        >>> m = Mitschnitt(kopf={"aufnahme": {"start_mono_ns": 5_000_000_000}}, zeilen=[])
+        >>> m.wanduhr_s(7_500_000_000), Mitschnitt(kopf={}, zeilen=[]).wanduhr_s(1)
+        (2.5, None)
+        """
+        start = self.aufnahme_start_ns
+        return None if start is None else (int(t_ns) - start) / 1e9
 
     @property
     def t0_ns(self) -> int:
