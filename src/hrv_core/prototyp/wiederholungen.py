@@ -1,8 +1,8 @@
 """PROTOTYP — Wiederholungen aus der Beschleunigung des Gurts zählen (nicht Grundlage
 gespeicherter Kennzahlen, darf sich ohne ``ALGO_VERSION`` ändern; Regeln: `hrv_core.prototyp`).
 
-Herkunft: hrv-research ``src/hrv_research/wiederholungen.py`` (Entscheidung 22, 4.11.2026),
-Konzept B3 in einfachster Form. Ein Satz ist ein bekanntes Zeitfenster (Satzgrenzen aus der App:
+Herkunft: hrv-research ``src/hrv_research/beschleunigung/wiederholungen.py`` (Entscheidung 22,
+4.11.2026), Konzept B3 in einfachster Form. Ein Satz ist ein bekanntes Zeitfenster (Satzgrenzen aus der App:
 Uhr der Übung, eingetragener Satz). Darin
 
 1. Schwerkraft weg: je Achse ein gleitendes Mittel über `HOCHPASS_S` abziehen;
