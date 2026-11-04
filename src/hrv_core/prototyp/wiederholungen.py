@@ -2,8 +2,8 @@
 gespeicherter Kennzahlen, darf sich ohne ``ALGO_VERSION`` ändern; Regeln: `hrv_core.prototyp`).
 
 Herkunft: hrv-research ``src/hrv_research/beschleunigung/wiederholungen.py`` (Entscheidung 22,
-4.11.2026), Konzept B3 in einfachster Form. Ein Satz ist ein bekanntes Zeitfenster (Satzgrenzen aus der App:
-Uhr der Übung, eingetragener Satz). Darin
+4.11.2026), Konzept B3 in einfachster Form. Ein Satz ist ein bekanntes Zeitfenster
+(Satzgrenzen aus der App: Uhr der Übung, eingetragener Satz). Darin
 
 1. Schwerkraft weg: je Achse ein gleitendes Mittel über `HOCHPASS_S` abziehen;
 2. Hauptachse der Bewegung: erste Hauptkomponente der drei Achsen (Vorzeichen egal);
