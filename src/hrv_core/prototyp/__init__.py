@@ -15,8 +15,12 @@ Regeln:
 - **Ausgang:** nach ``hrv-research/docs/UEBERNAHME.md`` in ein Stammmodul, dann mit Golden
   Master, Eintrag in ``docs/hrv_algorithmen.md`` und, wenn sich Zahlen ändern, ``ALGO_VERSION``.
 
-Erste Kandidaten (Plan Diagnosemodus der trainingsapp, §8.2): der Wiederholungszähler mit
-Satzgrenzen und die Atmung aus Beschleunigung und RSA (K4).
+Module:
+
+- `wiederholungen` — Wiederholungen eines Satzes aus der Beschleunigung (seit 0.8.0; Eingang mit
+  Ausnahme, Entscheidung 22 in hrv-research).
+
+Nächster Kandidat: die Atmung aus Beschleunigung und RSA (K4, Entscheidung 21).
 """
 
 from __future__ import annotations

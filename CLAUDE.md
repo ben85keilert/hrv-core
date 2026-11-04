@@ -102,7 +102,7 @@ Fensterspektrum, Spektrogramm), `nonlinear` (Poincaré, DFA α1, SampEn), `atmun
 `ekg` (EKG-Beiwerk), `mitschnitt` (Rohmitschnitt `mitschnitt-v1` aller Apps), `geraete/`
 (Dekoder ohne Bluetooth, zuerst `pmd`; später Treiber mit Reifegrad), `prototyp/` (Verfahren
 nach moderater Reife aus hrv-research — gekennzeichnet, ohne `ALGO_VERSION` und Golden Master,
-nie Grundlage gespeicherter Kennzahlen; Regeln im Modulkopf).
+nie Grundlage gespeicherter Kennzahlen; Regeln im Modulkopf; zuerst `wiederholungen`).
 Formeln und Fallstricke: `docs/hrv_algorithmen.md`, `docs/korrektur.md`; welche Felder die
 Bibliothek liest und schreibt: `docs/formate.md`.
 Gerätewissen für beide Apps (H10 als Referenz, Verity Sense, Decathlon, Beurer PO60, Prüfmethode):
