@@ -1,6 +1,6 @@
 # Dateiformate, die hrv-core liest und schreibt
 
-Stand 19.10.2026. Die maßgeblichen Verträge liegen bei den Apps:
+Stand 4.11.2026. Die maßgeblichen Verträge liegen bei den Apps:
 `praxis_gui/docs/sensor_hrv.md` (Feldreferenz `raw-v1`, Schreiber) und
 `trainingsapp/docs/kompatibilitaet.md` (Abgleich beider Apps, Erweiterungen).
 Diese Seite ist der Index aus Sicht der Bibliothek: welches Modul welches Format
@@ -38,7 +38,7 @@ während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxi
 Unbekannte Felder überleben einen Round-Trip (`Recording.extra`). Beim Schreiben
 wird eine vorhandene Datei nie ersetzt (`recording.freier_pfad`: `_1`, `_2` …).
 Dateinamen mit `_analyzed`, `_ecg`, `_ppg`, `_truth` und `__cNN` sind keine
-Messdateien (`ist_messdatei`).
+Messdateien (`ist_messdatei`), Endungen außer `.json` ebenso (`_mitschnitt.jsonl`).
 
 ## Crash-Backup `.backup_<UTC-Start>.json` + `.jsonl`
 
@@ -57,6 +57,11 @@ und Journal** (lange Aufnahmen: vorher wurde alle 15 s die ganze Datei neu gesch
 - `backup_lesen` setzt beides zusammen; ein Kopf **mit** `messungen` (Backup von vor dem
   Journal, praxis_gui) wird weiter gelesen. `_wiederherstellung` und `_journal` tragen nur
   `.backup_*`-Dateien; `deid` entfernt sie.
+- **Begleit-Journale** am Stamm des Kopfs: `.backup_<Start>_ecg.jsonl` (EKG, `ekg`) und
+  `.backup_<Start>_mitschnitt.jsonl` (Rohmitschnitt, `mitschnitt`). `backup_entfernen` löscht
+  sie mit (seit 0.6.0) — wer eines behalten will, macht vorher daraus das Beiwerk der
+  Messdatei. Das EKG-Journal schreibt seit 0.6.0 wie das der Schläge: `fsync`, eine halbe
+  Zeile wird abgeschlossen, ein neuer Pfad bekommt alles samt Kopf.
 
 ## Zusammenfügen `sensor_<ts>_zusammen.json`
 
@@ -86,6 +91,52 @@ vorhandenes Sidecar wird **fortgeschrieben**, fremde Felder (praxis_gui) bleiben
 | `active_crop` | ja | `t_start_s`, `t_end_s` auf der Herzuhr der Rohdatei |
 | `segments[]` | ja | `id`, `name`, `t_start_s`, `t_end_s` (bei Crop relativ zu dessen Anfang), `color`, `metrics`, `computed_utc`, `active`, `visible`; `gesamt` legt praxis_gui an; je Segment wird das gelesene Objekt fortgeschrieben (F11); Erweiterung `rand` (`kopf_s`, `endteil_s`, nur wenn gesetzt — praxis_gui behält es nicht, die Wahrheit ist die Marke der Start-Notiz) |
 | `metric_selection`, `rolling_*`, `frequency_summary`, `nonlinear_summary`, `neurokit2_hrv_*`, `ecg_qualitaet`, `ecg_morphologie` | nein (praxis_gui) | bleiben erhalten |
+
+## `mitschnitt-v1` — Rohmitschnitt `sensor_<ts>_mitschnitt.jsonl`
+
+`mitschnitt` (`Schreiber`, `lesen`, `laden`, `stroeme`, `zusammenfassen`), seit 0.6.0 (Plan
+Diagnosemodus der trainingsapp, 4.11.2026). Jedes Bluetooth-Paket einer Aufnahme roh, dazu
+Kommandos, Verbindungsereignisse, Uhrpaare, Zustandsproben, Diagnosemarken und Kontext.
+Ein Format für die trainingsapp (Diagnosemodus), die Brustgurt-Diagnose in hrv-research und
+später praxis_gui (`rohlog`). JSON Lines, nur angehängt, jede Zeile `{"art": …, "t": …}` mit
+`t` = monotone Uhr der App in ns:
+
+| `art` | Felder |
+|---|---|
+| `kopf` | `format` (`mitschnitt-v1`), `app`, `version`, `plattform`, `start_utc`, `wall_ns`, `messdatei`, `geraet` {`name`, `id` (Adresse), `profil`, `art`, `info`}, `stroeme` (gewählt, mit Einstellungen, etwa `{"acc": {"rate_hz": 200, "bereich_g": 8}}`), `dienste` (Abbild), `marken` |
+| `n` | Benachrichtigung: `c` Merkmal (Kürzel `hr`, `pmd_ctrl`, `pmd_data`, `akku`, `info_*` oder UUID), `x` Hex, vom Transport `s` (Folgenummer), `tm` (µs, monotone Uhr der Dart-Seite), `tw` (µs, Wanduhr der Dart-Seite) |
+| `w` | Kommando: `c`, `x`, `a` (mit Antwort) |
+| `r` | Lesen: `c`, `x` oder `fehler` |
+| `v` | Verbindung und Protokoll: `text`, `q` (Quelle), wahlweise `zustand`, `grund`, `code` |
+| `uhr` | alle 10 s: `utc`, `wall_ns` zur Zeit `t` (auch nach einem Neustart der App) |
+| `probe` | `akku`, `akku_handy`, `laedt`, `bildschirm`, `verzug_ms`, `verzug_spitze_ms`, `pakete`, `mb` |
+| `marke` | `id` (laufend je Datei), `typ` (`wdh`, `atem`, `stoerung`, `marke`), `quelle` (`handy`, `uhr`), `nr` (im Satz), `tm`, `kontext` {`uebung`, `uebung_id`, `satz`, `phase`, `feld`} |
+| `marke_weg` | `id` — nimmt eine Marke zurück; gelöscht wird nie |
+| `kontext` | `was` (`uebung_start`, `uebung_ende`, `timer_*`, `satz`, `pause`, `diagnose_start`, `diagnose_ende`), `uebung`, `uebung_id`, `satz`, `feld`, `wert`, `abschnitt`, `dauer_s`, `phase`, `art_marke` |
+
+- **Schreiben:** jede Zeile sofort geschrieben und geflusht, `fsync` höchstens alle 5 s;
+  endet die Datei beim Öffnen mitten in einer Zeile, beginnt der Anhang mit einem
+  Zeilenumbruch. Während der Aufnahme heißt die Datei `.backup_<ts>_mitschnitt.jsonl`
+  (`journal_pfad`), beim Speichern wird sie umbenannt (`Schreiber.umbenennen`,
+  `mitschnitt_pfad`). Ohne Messung (unbekanntes Gerät): `Diagnose/<ts>_<gerät>/mitschnitt.jsonl`.
+- **Lesen:** `lesen` übergeht leere, halbe und kaputte Zeilen; `stroeme` entschlüsselt EKG
+  (µV) und Beschleunigung (mG) aus `pmd_data` mit `geraete.pmd`, Probenzeiten nach Gerätezeit
+  (letzte Probe je Rahmen, Rate aus der Gerätezeit), Lücken ab 1,5 Proben; komprimierte
+  Rahmen werden gezählt, nie als Werte gelesen.
+- **Nie im Mitschnitt:** Seriennummer (0x2A25) und Systemkennung (0x2A23) liest keine App;
+  GPS gehört nicht hinein. `deid.mitschnitt_deidentifizieren` maskiert Adressen (der
+  Herstellerteil bleibt), kürzt den Gerätenamen auf das Modell — auch in Protokollzeilen —,
+  entfernt Zeilen der Merkmale 0x2A00/0x2A23/0x2A25 und alles, was `deid.MITSCHNITT_REGELN`
+  nicht kennt; `deid.pruefen` lehnt einen Mitschnitt ab, an dem das noch etwas ändern würde.
+
+## PMD-Dekoder `geraete.pmd`
+
+Polar Measurement Data (H10, Verity Sense) ohne Transport: Kommandos (`ECG_START`,
+`acc_start(rate, bereich, auflösung)`, `ACC_STOP`, `einstellungen_kommando`), Steuerantworten
+(`parse_control_antwort` mit `mehr` und `parameter`; `parse_einstellungen` für die Antwort auf
+„Einstellungen“), Merkmalsliste (`parse_feature_antwort`) und Rahmen (`parse_pmd_rahmen`,
+`parse_ekg_proben`, `parse_ppi_proben`, `parse_acc_proben` für die Frame-Typen 0x00–0x02).
+Bis 0.6.0 lag das in `trainingsapp/devices/pmd.py`; die App reicht es seitdem durch.
 
 ## Nur gelesen oder nur geprüft
 

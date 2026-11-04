@@ -22,6 +22,14 @@ Zwei Aufgaben, beide ohne Personenbezug im Code:
     und die Zuordnung Code ↔ Person steht außerhalb jedes Repos. Welche Messungen
     zur selben Person gehören, sagt allein der Personenordner (``p001``).
 
+``mitschnitt_deidentifizieren(quelle, ziel)``
+    dasselbe Zeile für Zeile für den Rohmitschnitt ``mitschnitt-v1``
+    (`MITSCHNITT_REGELN`, `hrv_core.mitschnitt`): Adressen maskiert
+    (`adressen_maskieren`, der Herstellerteil bleibt), der Gerätename auf das Modell
+    gekürzt — auch in den Protokollzeilen —, Zeilen der Merkmale mit einer Kennung des
+    Geräts (Gerätename, Systemkennung, Seriennummer) fallen weg, unbekannte Arten und
+    Felder ebenso.
+
 ``pruefen(wurzel)``
     läuft über den Testdatenordner und lehnt ab, was dort nicht hingehört:
     gefüllte Personenfelder, Seriennummern im Gerätenamen, unbekannte Felder,
@@ -43,11 +51,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import mitschnitt
 from .ereignisse import ANKER_FELDER, MARKE_FELDER
 
 PERSONENFELDER = ("patient_id", "behandlung_id", "subject_id", "adresse")
 FREITEXTFELDER = ("titel", "notiz")
-BEIWERK_SUFFIXE = ("_analyzed.json", "_ecg.json", "_ppg.json", "_truth.json")
+BEIWERK_SUFFIXE = (
+    "_analyzed.json",
+    "_ecg.json",
+    "_ppg.json",
+    "_truth.json",
+    mitschnitt.ENDUNG,
+)
 ORDNER_MUSTER = re.compile(r"^(p\d{3}|selbst)$")
 _KORRIGIERT = re.compile(r"__c\d+\.json$")
 #: Seriennummer am Ende eines BLE-Gerätenamens: Polar hängt 8 Zeichen [0-9A-F] an
@@ -60,6 +75,28 @@ _ADRESSE = re.compile(
     r"^(?:(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}"
     r"|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})$"
 )
+#: Dieselben Formen irgendwo im Text (wie ``trainingsapp.core.hrv_export.ADRESSE_MUSTER``):
+#: die Ränder verlangen ein Nicht-Hex-Zeichen, damit Uhrzeiten (``08:15:00``) und Datumsangaben
+#: nie anschlagen. Die Merkmals-UUIDs von Bluetooth (``0000180d-0000-1000-8000-00805f9b34fb``)
+#: haben dieselbe Form — sie bleiben (`_BT_BASIS`).
+ADRESSE_IM_TEXT = re.compile(
+    r"(?<![0-9A-Fa-f:-])(?:"
+    r"(?P<mac>(?:[0-9A-Fa-f]{2}[:-]){3})(?:[0-9A-Fa-f]{2}[:-]){2}[0-9A-Fa-f]{2}"
+    r"|(?P<uuid>[0-9A-Fa-f]{8})-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+    r")(?![0-9A-Fa-f:-])"
+)
+#: Endung der Bluetooth-Basis-UUID: ``0000xxxx-0000-1000-8000-00805f9b34fb`` ist ein Dienst
+#: oder Merkmal, keine Geräteadresse; herstellereigene Dienste (Polar PMD ``fb005c80-…``)
+#: stehen in `_DIENSTE`.
+_BT_BASIS = "-0000-1000-8000-00805f9b34fb"
+_DIENSTE = frozenset(
+    u.lower()
+    for u in (
+        "fb005c80-02e7-f387-1cad-8acd2d8df0c8",
+        "fb005c81-02e7-f387-1cad-8acd2d8df0c8",
+        "fb005c82-02e7-f387-1cad-8acd2d8df0c8",
+    )
+)
 
 # -- Weißliste ------------------------------------------------------------------
 #: Regeln je Feld: KEEP (bleibt), NULL (wird None), FREITEXT (bleibt, gemeldet),
@@ -70,6 +107,8 @@ NULL = "null"
 FREITEXT = "freitext"
 GERAET = "geraet"
 ENTFERNEN = "entfernen"
+ADRESSE = "adresse"  # Adressen im Wert maskiert, der Herstellerteil bleibt
+PROTOKOLL = "protokoll"  # Protokolltext der App: Adressen maskiert, nicht gemeldet
 
 MARKE_REGELN: dict[str, Any] = {f: KEEP for f in MARKE_FELDER} | {"name": FREITEXT}
 EREIGNIS_REGELN: dict[str, Any] = {
@@ -227,12 +266,119 @@ REGELN: dict[str, dict[str, Any]] = {
 }
 
 
+#: ``mitschnitt-v1`` (`hrv_core.mitschnitt`) — eine Weißliste je Art der Zeile. Zeilen einer
+#: unbekannten Art fallen ganz weg; ``c`` aus `mitschnitt.KENNUNGS_MERKMALE` ebenso.
+_ZEIT = {"art": KEEP, "t": KEEP}
+MITSCHNITT_REGELN: dict[str, dict[str, Any]] = {
+    mitschnitt.KOPF: {
+        **_ZEIT,
+        "format": KEEP,
+        "app": KEEP,
+        "version": KEEP,
+        "plattform": KEEP,
+        "start_utc": KEEP,
+        "wall_ns": KEEP,
+        "messdatei": KEEP,
+        "geraet": {
+            "name": GERAET,
+            "id": ADRESSE,
+            "profil": KEEP,
+            "art": KEEP,
+            "info": KEEP,  # Hersteller, Modell, Firmware … — nie die Seriennummer
+        },
+        "stroeme": KEEP,
+        "dienste": KEEP,
+        "marken": KEEP,
+    },
+    mitschnitt.N: {**_ZEIT, "c": KEEP, "x": KEEP, "s": KEEP, "tm": KEEP, "tw": KEEP},
+    mitschnitt.W: {**_ZEIT, "c": KEEP, "x": KEEP, "a": KEEP},
+    mitschnitt.R: {**_ZEIT, "c": KEEP, "x": KEEP, "fehler": PROTOKOLL},
+    mitschnitt.V: {
+        **_ZEIT,
+        "text": PROTOKOLL,
+        "q": KEEP,
+        "zustand": KEEP,
+        "grund": PROTOKOLL,
+        "code": KEEP,
+    },
+    mitschnitt.UHR: {**_ZEIT, "utc": KEEP, "wall_ns": KEEP},
+    mitschnitt.PROBE: {
+        **_ZEIT,
+        "akku": KEEP,
+        "akku_handy": KEEP,
+        "laedt": KEEP,
+        "bildschirm": KEEP,
+        "verzug_ms": KEEP,
+        "verzug_spitze_ms": KEEP,
+        "pakete": KEEP,
+        "mb": KEEP,
+    },
+    mitschnitt.MARKE: {
+        **_ZEIT,
+        "id": KEEP,
+        "typ": KEEP,
+        "quelle": KEEP,
+        "nr": KEEP,
+        "tm": KEEP,
+        "kontext": {
+            "uebung": FREITEXT,
+            "uebung_id": KEEP,
+            "satz": KEEP,
+            "phase": KEEP,
+            "feld": KEEP,
+        },
+    },
+    mitschnitt.MARKE_WEG: {**_ZEIT, "id": KEEP, "quelle": KEEP},
+    mitschnitt.KONTEXT: {
+        **_ZEIT,
+        "was": KEEP,
+        "uebung": FREITEXT,
+        "uebung_id": KEEP,
+        "satz": KEEP,
+        "feld": KEEP,
+        "wert": KEEP,
+        "abschnitt": FREITEXT,
+        "dauer_s": KEEP,
+        "phase": KEEP,
+        "art_marke": KEEP,
+    },
+}
+
+
+def adressen_maskieren(text: str) -> str:
+    """Alle BLE-Adressen im Text unkenntlich machen — wie die trainingsapp beim Teilen.
+
+    Von einer MAC bleiben die ersten drei Oktette (der Herstellerteil), von einer UUID die
+    ersten acht Zeichen. Dienst- und Merkmals-UUIDs von Bluetooth bleiben stehen.
+
+    >>> adressen_maskieren("Polar H10 [E2:B4:CC:3F:08:44] um 08:15:00")
+    'Polar H10 [E2:B4:CC:xx:xx:xx] um 08:15:00'
+    >>> adressen_maskieren("0F1E2D3C-4B5A-6978-8796-A5B4C3D2E1F0 und "
+    ...                    "0000180d-0000-1000-8000-00805f9b34fb")
+    '0F1E2D3C-xxxx-xxxx-xxxx-xxxxxxxxxxxx und 0000180d-0000-1000-8000-00805f9b34fb'
+    """
+
+    def ersetzen(treffer: re.Match[str]) -> str:
+        mac = treffer.group("mac")
+        if mac:
+            trenner = mac[2]
+            return mac + trenner.join(("xx", "xx", "xx"))
+        ganz = treffer.group(0).lower()
+        if ganz.endswith(_BT_BASIS) or ganz in _DIENSTE:
+            return treffer.group(0)
+        return treffer.group("uuid") + "-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+    return ADRESSE_IM_TEXT.sub(ersetzen, text)
+
+
 def stamm(pfad: Path) -> str:
     """Gemeinsamer Namensstamm einer Messdatei und ihres Beiwerks.
 
     >>> stamm(Path("sensor_2026-05-23_125422_analyzed.json"))
     'sensor_2026-05-23_125422'
     >>> stamm(Path("sensor_2026-05-23_125422__c01.json"))
+    'sensor_2026-05-23_125422'
+    >>> stamm(Path("sensor_2026-05-23_125422_mitschnitt.jsonl"))
     'sensor_2026-05-23_125422'
     """
     name = pfad.name
@@ -341,6 +487,13 @@ def _anwenden(wert: Any, regel: Any, pfad: str, meldungen: list[tuple[str, str]]
     if regel == ENTFERNEN:
         meldungen.append(("entfernt", pfad))
         return _WEG
+    if regel in (ADRESSE, PROTOKOLL):
+        if not isinstance(wert, str):
+            return wert
+        neu = adressen_maskieren(wert)
+        if neu != wert:
+            meldungen.append(("maskiert", pfad))
+        return neu
     if wert is None:
         return None
     if isinstance(regel, list):
@@ -395,7 +548,10 @@ def deidentifizieren_dict(
 
 
 def _datei_deidentifizieren(quelle: Path, ziel: Path) -> list[tuple[str, str]]:
-    """Eine Datei: JSON über die Weißliste neu schreiben, alles andere byteweise kopieren."""
+    """Eine Datei: JSON über die Weißliste neu schreiben, den Mitschnitt Zeile für Zeile,
+    alles andere byteweise kopieren."""
+    if mitschnitt.ist_mitschnitt(quelle):
+        return mitschnitt_deidentifizieren(quelle, ziel)
     if quelle.suffix.lower() != ".json":
         shutil.copyfile(quelle, ziel)
         return []
@@ -406,6 +562,78 @@ def _datei_deidentifizieren(quelle: Path, ziel: Path) -> list[tuple[str, str]]:
     neu, meldungen = deidentifizieren_dict(daten, quelle.name)
     with open(ziel, "w", encoding="utf-8") as fh:
         json.dump(neu, fh, ensure_ascii=False, indent=2)
+    return meldungen
+
+
+def _merkmal(c: Any) -> str:
+    return mitschnitt.uuid_von(str(c)) if isinstance(c, str) else ""
+
+
+def mitschnitt_zeilen(zeilen: Any, meldungen: list[tuple[str, str]] | None = None) -> Any:
+    """Zeilen eines Mitschnitts über die Weißliste — ein Generator, Zeile für Zeile.
+
+    ``meldungen`` nimmt ``(art, pfad)`` auf, je Pfad (``n.c``, ``v.text`` …) einmal. Der volle
+    Gerätename aus dem Kopf wird überall durch das Modell ersetzt; der Kopf muss dafür vorn
+    stehen (wie ihn `mitschnitt.Schreiber` schreibt).
+
+    >>> m = []
+    >>> list(mitschnitt_zeilen([
+    ...     {"art": "kopf", "t": 0,
+    ...      "geraet": {"name": "Polar H10 A1B2C3D4", "id": "E2:B4:CC:3F:08:44"}},
+    ...     {"art": "v", "t": 1, "text": "Verbinde mit Polar H10 A1B2C3D4 [E2:B4:CC:3F:08:44]"},
+    ...     {"art": "r", "t": 2, "c": "00002a25-0000-1000-8000-00805f9b34fb", "x": "41"},
+    ...     {"art": "gps", "t": 3, "lat": 52.1}], m))  # doctest: +NORMALIZE_WHITESPACE
+    [{'art': 'kopf', 't': 0, 'geraet': {'name': 'Polar H10', 'id': 'E2:B4:CC:xx:xx:xx'}},
+     {'art': 'v', 't': 1, 'text': 'Verbinde mit Polar H10 [E2:B4:CC:xx:xx:xx]'}]
+    >>> sorted({a for a, _ in m})
+    ['entfernt', 'gekuerzt', 'maskiert', 'unbekannt']
+    """
+    gesehen: set[tuple[str, str]] = set()
+    sammel: list[tuple[str, str]] = []
+    name_voll: str | None = None
+    name_kurz: str | None = None
+    for zeile in zeilen:
+        sammel.clear()
+        art = zeile.get("art") if isinstance(zeile, dict) else None
+        regel = MITSCHNITT_REGELN.get(art) if isinstance(art, str) else None
+        if regel is None:
+            sammel.append(("unbekannt", str(art)))
+            neu: Any = _WEG
+        elif art in (mitschnitt.N, mitschnitt.R, mitschnitt.W) and (
+            _merkmal(zeile.get("c")) in mitschnitt.KENNUNGS_MERKMALE
+        ):
+            sammel.append(("entfernt", f"{art}.c"))
+            neu = _WEG
+        else:
+            if art == mitschnitt.KOPF:
+                geraet = zeile.get("geraet")
+                name = geraet.get("name") if isinstance(geraet, dict) else None
+                if isinstance(name, str):
+                    kurz = geraet_modell(name)
+                    if kurz != name:
+                        name_voll, name_kurz = name, str(kurz)
+            neu = _anwenden(zeile, regel, str(art), sammel)
+            if name_voll and name_kurz and isinstance(neu, dict):
+                for feld in ("text", "grund", "fehler"):
+                    wert = neu.get(feld)
+                    if isinstance(wert, str) and name_voll in wert:
+                        neu[feld] = wert.replace(name_voll, name_kurz)
+                        sammel.append(("gekuerzt", f"{art}.{feld}"))
+        if meldungen is not None:
+            for eintrag in sammel:
+                if eintrag not in gesehen:
+                    gesehen.add(eintrag)
+                    meldungen.append(eintrag)
+        if neu is not _WEG:
+            yield neu
+
+
+def mitschnitt_deidentifizieren(quelle: Path | str, ziel: Path | str) -> list[tuple[str, str]]:
+    """Einen Mitschnitt de-identifiziert nach ``ziel`` schreiben — die Meldungen zurück."""
+    meldungen: list[tuple[str, str]] = []
+    with open(ziel, "w", encoding="utf-8") as fh:
+        for zeile in mitschnitt_zeilen(mitschnitt.lesen(quelle), meldungen):
+            fh.write(json.dumps(zeile, ensure_ascii=False, separators=(",", ":")) + "\n")
     return meldungen
 
 
@@ -465,6 +693,40 @@ def _datei_pruefen(daten: dict, datei: Path, bericht: Pruefbericht) -> None:
         return
     meldungen: list[tuple[str, str]] = []
     _anwenden(daten, REGELN[art], "", meldungen)
+    _urteilen(meldungen, daten, datei, bericht)
+
+
+def _mitschnitt_pruefen(datei: Path, bericht: Pruefbericht) -> None:
+    """Ein Mitschnitt über `mitschnitt_zeilen`, nur urteilend: maskierte Adressen,
+    gekürzte Namen und entfernte Zeilen hießen, dass die Datei nicht bereinigt ist."""
+    meldungen: list[tuple[str, str]] = []
+    try:
+        for _ in mitschnitt_zeilen(mitschnitt.lesen(datei), meldungen):
+            pass
+    except OSError:
+        bericht.ablehnungen.append((datei, "nicht lesbar"))
+        return
+    nach_art: dict[str, list[str]] = {}
+    for was, pfad in meldungen:
+        nach_art.setdefault(was, []).append(pfad)
+    if "maskiert" in nach_art:
+        bericht.ablehnungen.append(
+            (datei, "Adresse unmaskiert: " + ", ".join(nach_art["maskiert"]))
+        )
+    if "entfernt" in nach_art:
+        bericht.ablehnungen.append(
+            (
+                datei,
+                "Kennung des Geräts (Name, Systemkennung, Seriennummer): "
+                + ", ".join(nach_art["entfernt"]),
+            )
+        )
+    _urteilen([m for m in meldungen if m[0] not in ("maskiert", "entfernt")], {}, datei, bericht)
+
+
+def _urteilen(
+    meldungen: list[tuple[str, str]], daten: dict, datei: Path, bericht: Pruefbericht
+) -> None:
     nach_art: dict[str, list[str]] = {}
     for was, pfad in meldungen:
         nach_art.setdefault(was, []).append(pfad)
@@ -492,7 +754,8 @@ def _datei_pruefen(daten: dict, datei: Path, bericht: Pruefbericht) -> None:
 
 
 def pruefen(wurzel: str | Path, *, ordnerregel: bool = True) -> Pruefbericht:
-    """Prüft alle JSON-Dateien unter ``wurzel`` (auch ``.backup_*``) und die Personenordner."""
+    """Prüft alle JSON-Dateien unter ``wurzel`` (auch ``.backup_*``), die Mitschnitte
+    (``*_mitschnitt.jsonl``, ``mitschnitt.jsonl``) und die Personenordner."""
     wurzel = Path(wurzel)
     bericht = Pruefbericht()
     if not wurzel.is_dir():
@@ -504,6 +767,10 @@ def pruefen(wurzel: str | Path, *, ordnerregel: bool = True) -> Pruefbericht:
                 bericht.ablehnungen.append(
                     (eintrag, "Ordnername folgt nicht dem Muster p### oder selbst")
                 )
+    for datei in sorted(wurzel.rglob("*.jsonl")):
+        if mitschnitt.ist_mitschnitt(datei):
+            bericht.geprueft += 1
+            _mitschnitt_pruefen(datei, bericht)
     for datei in sorted(wurzel.rglob("*.json")):
         bericht.geprueft += 1
         try:
@@ -520,8 +787,10 @@ def pruefen(wurzel: str | Path, *, ordnerregel: bool = True) -> Pruefbericht:
 
 
 __all__ = [
+    "ADRESSE_IM_TEXT",
     "BEIWERK_SUFFIXE",
     "FREITEXTFELDER",
+    "MITSCHNITT_REGELN",
     "ORDNER_MUSTER",
     "PERSONENFELDER",
     "REGELN",

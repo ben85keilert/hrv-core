@@ -20,8 +20,11 @@ R-Zacken-Erkennung ist Entscheidung 1 in hrv-research, offen). `ist_messdatei` k
 Endung und übergeht die Datei; `deid` behält alle Felder.
 
 Crash-Sicherheit: `EkgSammler.journal_anhaengen` hängt neue Rahmen als JSON-Zeilen an eine
-``.jsonl`` neben dem Backup der Aufnahme; `EkgSammler.aus_journal` baut daraus den Sammler
-wieder auf.
+``.jsonl`` neben dem Backup der Aufnahme — wie das Journal der Schläge (`aufnahme`): jede
+Zeile für sich abgeschlossen, zuletzt ``fsync``; endet die Datei mitten in einer Zeile
+(Absturz beim Schreiben), beginnt der Anhang mit einem Zeilenumbruch, und ein anderes oder
+verschwundenes Journal bekommt alles noch einmal (seit 0.6.0, Diagnosemodus V6).
+`EkgSammler.aus_journal` baut daraus den Sammler wieder auf und übergeht Unlesbares.
 """
 
 from __future__ import annotations
@@ -90,6 +93,7 @@ class EkgSammler:
         self.batterie: list[list[float]] = []
         self._journal_ab = 0  # so viele Rahmen stehen schon im Journal
         self._journal_batterie_ab = 0
+        self._journal_pfad: Path | None = None
 
     # -- Sammeln ---------------------------------------------------------------
 
@@ -179,18 +183,43 @@ class EkgSammler:
         return ziel
 
     def journal_anhaengen(self, journal: Path | str) -> None:
-        """Neue Rahmen (seit dem letzten Aufruf) an das Journal hängen.
+        """Neue Rahmen (seit dem letzten Aufruf) an das Journal hängen, zuletzt ``fsync``.
 
-        Zeilen: ``["r", t_ns, [uv…]]`` je Rahmen, ``["b", t_wall_s, prozent]`` je Akkostand;
-        die erste Zeile ``["k", rate_hz, t_wall_start_s]`` ist der Kopf.
+        Zeilen: ``["r", t_ns, [uv…]]`` je Rahmen, ``["b", t_wall_s, prozent]`` je Akkustand;
+        die erste Zeile ``["k", rate_hz, t_wall_start_s]`` ist der Kopf. Ein anderer Pfad als
+        beim letzten Mal oder ein verschwundenes Journal: alles noch einmal, mit Kopf. Die
+        Zähler rücken erst nach dem Schreiben vor — scheitert es, kommt beim nächsten Mal
+        derselbe Stand.
+
+        >>> import tempfile
+        >>> ordner = Path(tempfile.mkdtemp())
+        >>> s = EkgSammler()
+        >>> s.rahmen(1_000, [1, 2], t_wall_s=1.0)
+        >>> s.journal_anhaengen(ordner / "a.jsonl")
+        >>> _ = (ordner / "a.jsonl").open("a").write('["r", 5, [3')   # halbe Zeile
+        >>> s.rahmen(2_000, [4], t_wall_s=1.1)
+        >>> s.journal_anhaengen(ordner / "a.jsonl")
+        >>> EkgSammler.aus_journal(ordner / "a.jsonl").uv.tolist()
+        [1, 2, 4]
         """
         pfad = Path(journal)
+        if pfad != self._journal_pfad or not pfad.exists():
+            self._journal_pfad = pfad
+            self._journal_ab = self._journal_batterie_ab = 0
+            pfad.unlink(missing_ok=True)  # ein fremder Rest bekäme sonst einen zweiten Kopf
         neu_rahmen = range(self._journal_ab, self.n_rahmen)
         neu_batterie = range(self._journal_batterie_ab, len(self.batterie))
         if not neu_rahmen and not neu_batterie and pfad.exists():
             return
+        halb = False
+        if pfad.exists() and pfad.stat().st_size:
+            with open(pfad, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                halb = f.read(1) != b"\n"
         offsets = self.frame_offsets
         with open(pfad, "a", encoding="utf-8") as f:
+            if halb:
+                f.write("\n")
             if self._journal_ab == 0 and self._journal_batterie_ab == 0:
                 f.write(json.dumps(["k", self.rate_hz, self.t_wall_start_s]) + "\n")
             for k in neu_rahmen:
@@ -199,6 +228,8 @@ class EkgSammler:
                 f.write(json.dumps(["r", self.frame_t_ns[k], self.uv[lo:hi].tolist()]) + "\n")
             for k in neu_batterie:
                 f.write(json.dumps(["b", *self.batterie[k]]) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
         self._journal_ab = self.n_rahmen
         self._journal_batterie_ab = len(self.batterie)
 
@@ -228,6 +259,7 @@ class EkgSammler:
                     s.batterie.append([float(eintrag[1]), int(eintrag[2])])
         s._journal_ab = s.n_rahmen
         s._journal_batterie_ab = len(s.batterie)
+        s._journal_pfad = Path(journal)
         return s
 
 

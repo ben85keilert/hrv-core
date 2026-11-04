@@ -98,7 +98,11 @@ uv run --with bleak python scripts/ble_erkundung.py ADRESSE   # Dienste und RR-S
 Fensterspektrum, Spektrogramm), `nonlinear` (Poincaré, DFA α1, SampEn), `atmung`
 (Prüfkette, Fenster, Median), `spektralprofil`, `trends` (Verlaufskurven), `ausschnitte`
 (Crop, Abschnitte), `ppi`/`zeitachse` (Verity Sense), `live`, `ereignisse` (Notiz-Anker),
-`referenz` (alles auf einmal, Grundlage der Golden Master), `deid` (Weißliste je Format).
+`referenz` (alles auf einmal, Grundlage der Golden Master), `deid` (Weißliste je Format),
+`ekg` (EKG-Beiwerk), `mitschnitt` (Rohmitschnitt `mitschnitt-v1` aller Apps), `geraete/`
+(Dekoder ohne Bluetooth, zuerst `pmd`; später Treiber mit Reifegrad), `prototyp/` (Verfahren
+nach moderater Reife aus hrv-research — gekennzeichnet, ohne `ALGO_VERSION` und Golden Master,
+nie Grundlage gespeicherter Kennzahlen; Regeln im Modulkopf).
 Formeln und Fallstricke: `docs/hrv_algorithmen.md`, `docs/korrektur.md`; welche Felder die
 Bibliothek liest und schreibt: `docs/formate.md`.
 Gerätewissen für beide Apps (H10 als Referenz, Verity Sense, Decathlon, Beurer PO60, Prüfmethode):

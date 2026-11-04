@@ -401,10 +401,28 @@ def backup_lesen(pfad: Path | str) -> tuple[Recording, dict[str, Any]]:
 
 
 def backup_entfernen(pfad: Path | str) -> None:
-    """Kopf und Journal eines Backups löschen — nach der Wiederherstellung."""
+    """Kopf, Journal und Begleit-Journale eines Backups löschen — nach der Wiederherstellung
+    oder wenn die Person es verwirft.
+
+    Begleit-Journale hängen am Stamm des Kopfs: ``.backup_<ts>_ecg.jsonl`` (EKG,
+    `hrv_core.ekg`), ``.backup_<ts>_mitschnitt.jsonl`` (Rohmitschnitt, `hrv_core.mitschnitt`).
+    Wer eines davon behalten will, nimmt es vorher an sich (Diagnosemodus V5).
+
+    >>> import tempfile
+    >>> ordner = Path(tempfile.mkdtemp())
+    >>> for name in (".backup_1.json", ".backup_1.jsonl", ".backup_1_ecg.jsonl",
+    ...              ".backup_1_mitschnitt.jsonl", ".backup_12.json", "sensor_1.json"):
+    ...     _ = (ordner / name).write_text("{}")
+    >>> backup_entfernen(ordner / ".backup_1.json")
+    >>> sorted(p.name for p in ordner.iterdir())
+    ['.backup_12.json', 'sensor_1.json']
+    """
     kopf = Path(pfad)
     kopf.unlink(missing_ok=True)
     kopf.with_name(kopf.name + "l").unlink(missing_ok=True)
+    if kopf.parent.is_dir():
+        for begleit in kopf.parent.glob(f"{kopf.stem}_*.jsonl"):
+            begleit.unlink(missing_ok=True)
 
 
 def _journal_lesen(pfad: Path, rec: Recording) -> None:

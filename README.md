@@ -21,7 +21,10 @@ fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0
   `time_domain`, `frequency` (samt Spektrogramm), `nonlinear`, `atmung`, `spektralprofil`, `trends`,
   `ausschnitte`, `ppi`/`zeitachse` (Verity Sense), `live`, `ereignisse`, `referenz` (alles auf einmal), `deid`,
   `herzfrequenz` (HF auf der Wanduhr: Ruhe-/Nacht-HF, HFmax-Kandidat, %HRR, Bereiche, Erholung, TRIMP,
-  Wertehierarchie — seit 29.10.2026).
+  Wertehierarchie — seit 29.10.2026), `ekg` (EKG-Beiwerk), `mitschnitt` (Rohmitschnitt
+  `mitschnitt-v1`, seit 0.6.0), `geraete/` (Dekoder ohne Bluetooth: `pmd` — EKG, PPI,
+  Beschleunigung), `prototyp/` (Verfahren nach moderater Reife, gekennzeichnet, nie Grundlage
+  gespeicherter Kennzahlen).
 - `tests/fixtures/` Messdateien ohne Personenbezug · `tests/golden/trainingsapp/` Golden Master
   (`test_golden_trainingsapp.py`, 1e-9) · `tests/golden/praxis_gui/` Vorher-Stand von praxis_gui
   (scipy/NK2) für `docs/VERGLEICH_ZAHLEN.md` · `tests/referenz/` Vergleich gegen scipy/neurokit2.

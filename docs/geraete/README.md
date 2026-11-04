@@ -46,3 +46,15 @@ Zeitbilanz. Es schreibt nie auf das Gerät. Rohpakete und Befund landen unter
 
 Was danach kommt — Rohmitschnitt in der App, Prüfbericht, Doppelmessung gegen den H10 — steht
 in [`ble_uebertragung_pruefen.md`](ble_uebertragung_pruefen.md).
+
+## Gerätewissen als Code
+
+Seit 0.6.0 (4.11.2026) liegt, was ohne Bluetooth geht, in `hrv_core.geraete`: zuerst
+`geraete.pmd` (Polar Measurement Data — EKG, PPI, Beschleunigung, Einstellungen,
+Merkmalsliste). Der gemeinsame Rohmitschnitt aller Apps ist `hrv_core.mitschnitt`
+(`mitschnitt-v1`, `docs/formate.md`): Aus Mitschnitten entsteht der Dekoder eines neuen
+Geräts. Geplant (Plan Diagnosemodus der trainingsapp, Stufe 7): Profile und Treiber je Gerät
+mit Reifegrad *erkannt* → *Prototyp* (Dekoder an einer Geräteprobe getestet) → *geprüft*
+(gegen den H10 nach `ble_uebertragung_pruefen.md`) → *empfohlen*. Geräteproben anderer
+Personen kommen nie ins Repo (Ben, 4.11.2026, P115) — hier landen nur der Treiber und
+synthetische Nachbauten nach dem entschlüsselten Protokoll.

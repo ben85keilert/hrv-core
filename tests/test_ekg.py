@@ -74,3 +74,36 @@ def test_altes_praxis_gui_beiwerk_ohne_erweiterungen(tmp_path) -> None:
     e = ekg.ekg_laden(pfad)
     assert e.frame_sample_counts == [4] and e.frame_offsets == [0] and e.frame_t_ns == []
     assert np.allclose(e.zeit_s(), np.arange(4) / 130)
+
+
+def test_journal_mit_fsync_neuem_pfad_und_halber_zeile(tmp_path, monkeypatch) -> None:
+    """Diagnosemodus V6: wie das Journal der Schläge — fsync, ein neuer oder verschwundener
+    Pfad bekommt alles samt Kopf, eine halbe Zeile wird abgeschlossen statt fortgesetzt."""
+    aufrufe: list[int] = []
+    echt = ekg.os.fsync
+    monkeypatch.setattr(ekg.os, "fsync", lambda fd: (aufrufe.append(fd), echt(fd)))
+    s = ekg.EkgSammler()
+    for k in range(3):
+        _rahmen(s, k)
+    a, b = tmp_path / "a_ecg.jsonl", tmp_path / "b_ecg.jsonl"
+    s.journal_anhaengen(a)
+    assert len(aufrufe) == 1
+    _rahmen(s, 3)
+    s.journal_anhaengen(b)  # anderer Ordner: alles noch einmal, mit Kopf
+    assert ekg.EkgSammler.aus_journal(b).uv.tolist() == s.uv.tolist()
+    b.unlink()  # verschwunden: wieder alles
+    _rahmen(s, 4)
+    s.journal_anhaengen(b)
+    with open(b, "a", encoding="utf-8") as f:
+        f.write('["r", 1, [7, 8')  # Abbruch mitten in der Zeile
+    _rahmen(s, 5)
+    s.journal_anhaengen(b)
+    wieder = ekg.EkgSammler.aus_journal(b)
+    assert wieder.uv.tolist() == s.uv.tolist() and wieder.n_rahmen == 6
+    # Nach dem Wiederaufbau geht es im selben Journal weiter, ohne zweiten Kopf
+    _rahmen(wieder, 6)
+    wieder.journal_anhaengen(b)
+    zeilen = [
+        json.loads(z) for z in b.read_text(encoding="utf-8").splitlines() if z.startswith('["k"')
+    ]
+    assert len(zeilen) == 1 and ekg.EkgSammler.aus_journal(b).n_rahmen == 7
