@@ -50,6 +50,7 @@ def echte_datei() -> Path:
         ("sensor_2026-05-23_125422_analyzed.json", False),
         ("sensor_2026-05-23_125422_ecg.json", False),
         ("sensor_2026-05-23_125422_truth.json", False),
+        ("sensor_2026-05-23_125422_atem.json", False),
         ("sensor_2026-05-23_125422__c01.json", False),
         ("messung.json", False),
         ("sensor_2026-05-23_125422.txt", False),

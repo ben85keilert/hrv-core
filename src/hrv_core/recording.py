@@ -28,7 +28,7 @@ SCHEMA_RAW: str = "raw-v1"
 _ZEITFORMAT_UTC = "%Y-%m-%dT%H:%M:%SZ"
 
 # Endungen, die zwar mit `sensor_` beginnen, aber keine Messdateien sind.
-_KEINE_MESSDATEI = ("_analyzed.json", "_ecg.json", "_ppg.json", "_truth.json")
+_KEINE_MESSDATEI = ("_analyzed.json", "_ecg.json", "_ppg.json", "_truth.json", "_atem.json")
 _KORRIGIERT_MUSTER = re.compile(r"__c\d+$")
 
 #: Unterordner unter ``Messungen/`` für synthetische Daten (Vertrag, Abschnitt 6).
@@ -352,7 +352,7 @@ def _qualitaet_raten(intervall_quelle: str, beats: list[Beat]) -> str:
 def ist_messdatei(pfad: Path | str) -> bool:
     """Ob diese Datei eine Rohmessung ist.
 
-    Der Name entscheidet: `sensor_*.json`, aber keine Analyse-, EKG-, PPG-,
+    Der Name entscheidet: `sensor_*.json`, aber keine Analyse-, EKG-, PPG-, Atem-,
     Wahrheits- oder Korrekturdatei. Crash-Backups (`.backup_*`) und
     Zwischenstände (`*.tmp`) fallen schon durch Präfix bzw. Endung heraus.
     Vertrag: docs/kompatibilitaet.md, Abschnitt 2.

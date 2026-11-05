@@ -1,0 +1,486 @@
+"""Atemphasen als Beiwerk ``sensor_<ts>_atem.json`` (``atem-v1``) — sammeln, sichern, lesen.
+
+Das Ergebnis der Atemerfassung aus dem Beschleunigungssensor (trainingsapp,
+``docs/plan_beschleunigung.md`` §7.4 und §8: **Ergebnisse statt Rohdaten**, P123). Der
+Inhalt stammt aus einem Prototyp (`hrv_core.prototyp`) und ist so gekennzeichnet
+(``art``, ``prototyp``); das Dateiformat selbst ist stabil und wird hier gepflegt:
+
+- ``erfasst[]`` — die Läufe von „Atmung erfassen“, ``[von_s, bis_s]`` je Lauf. Ohne einen
+  solchen Eintrag ist eine Lücke „nicht gemessen“, nicht „kein Atemzug“.
+- ``phasen[]`` — ``[t_s, "ein" | "aus"]``, Beginn von Ein- bzw. Ausatmen, zeitlich sortiert.
+- ``fenster[]`` — ``[t_ende_s, rate_pro_min, gueltig, grund]`` je Prüffenster (alle 5 s,
+  30 s lang, Ende des Fensters); ``rate_pro_min`` ist ``null`` und ``grund`` ein
+  snake_case-Code aus dem Prototyp (``bewegung``, ``amplitude_klein``, ``unregelmaessig``,
+  ``zu_wenig_zyklen``, ``kein_gipfel`` …), wenn das Fenster nicht gültig ist.
+- Kopf: ``schema``, ``art`` (``prototyp``), ``prototyp`` (Modulname), ``hrv_core``
+  (Version), ``quelle`` (``sensor`` — ``takt`` ist für den Taktgeber reserviert), ``geraet``
+  (Profil-ID wie ``polar_h10``, nie Name, Adresse oder Seriennummer), ``rate_hz``.
+
+Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (``t_wall_s`` wie die Schläge),
+3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetometer, keine Korrekturen
+(±1 steht in der Zeitleiste der Einheit). `recording.ist_messdatei` kennt die Endung und
+übergeht die Datei; `deid` behält alle Felder.
+
+Crash-Sicherheit wie beim EKG (`ekg`): `AtemSammler.journal_anhaengen` hängt nur Neues als
+JSON-Zeilen an eine ``.jsonl`` neben dem Crash-Backup — ``["k", {kopf}]``, ``["e", von_s]``
+(Lauf auf), ``["x", bis_s]`` (Lauf zu), ``["p", t_s, art]``, ``["f", t_ende_s, rate, gueltig,
+grund]`` —, jede Zeile für sich abgeschlossen, zuletzt ``fsync``; endet die Datei mitten in
+einer Zeile, beginnt der Anhang mit einem Zeilenumbruch, und ein anderes oder verschwundenes
+Journal bekommt alles noch einmal. `AtemSammler.aus_journal` baut daraus den Sammler wieder
+auf und übergeht Unlesbares. Ein offener Lauf bleibt im Journal offen; `dokument` und
+`schreiben` schließen ihn mit dem letzten bekannten Zeitpunkt (letzte Phase oder letztes
+Fenster, sonst ``von_s``).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from . import __version__
+
+#: Schema dieses Beiwerks
+ATEM_SCHEMA: str = "atem-v1"
+#: Endung des Beiwerks neben der Messdatei
+ATEM_ENDUNG: str = "_atem.json"
+#: Endung des Journals neben dem Crash-Backup
+ATEM_JOURNAL_ENDUNG: str = "_atem.jsonl"
+#: Kennzeichnung des Inhalts: er stammt aus einem Prototyp (`hrv_core.prototyp`)
+ATEM_ART: str = "prototyp"
+#: Die beiden Phasen eines Atemzugs
+PHASEN: tuple[str, ...] = ("ein", "aus")
+#: Quelle der Erfassung: Beschleunigungssensor; ``takt`` ist für den Taktgeber reserviert
+QUELLE_SENSOR: str = "sensor"
+QUELLE_TAKT: str = "takt"
+
+
+def atem_pfad(messdatei: Path | str) -> Path:
+    """Das Atem-Beiwerk zu einer Messdatei: ``sensor_<ts>.json`` → ``sensor_<ts>_atem.json``.
+
+    >>> atem_pfad("Messungen/PolarH10/sensor_2026-11-05_061500.json").name
+    'sensor_2026-11-05_061500_atem.json'
+    """
+    p = Path(messdatei)
+    return p.with_name(p.stem + ATEM_ENDUNG)
+
+
+def atem_journal_pfad(backup: Path | str) -> Path:
+    """Das Atem-Journal zu einem Crash-Backup ``.backup_<ts>.json``.
+
+    >>> atem_journal_pfad("Messungen/PolarH10/.backup_2026-11-05_061500.json").name
+    '.backup_2026-11-05_061500_atem.jsonl'
+    """
+    p = Path(backup)
+    return p.with_name(p.stem + ATEM_JOURNAL_ENDUNG)
+
+
+def _zeit(t: Any) -> float:
+    return round(float(t), 3)
+
+
+def _rate(rate: Any) -> float | None:
+    if rate is None:
+        return None
+    try:
+        wert = float(rate)
+    except (TypeError, ValueError):
+        return None
+    return None if wert != wert else round(wert, 2)  # NaN → None
+
+
+def _rate_hz(rate_hz: Any) -> float | None:
+    if rate_hz is None:
+        return None
+    try:
+        wert = float(rate_hz)
+    except (TypeError, ValueError):
+        return None
+    return int(wert) if wert.is_integer() else wert
+
+
+class AtemSammler:
+    """Läufe, Phasen und Fenster der Atemerfassung sammeln und als Beiwerk schreiben.
+
+    >>> s = AtemSammler("sensor", "polar_h10", 50, prototyp="hrv_core.prototyp.atemzuege")
+    >>> s.leer
+    True
+    >>> s.lauf_beginn(10.0)
+    >>> s.phase(12.345678, "ein")
+    >>> s.phase(14.5, "aus")
+    >>> s.fenster(40.0, 12.34, True)
+    >>> s.fenster(45.0, None, False, "bewegung")
+    >>> doc = s.dokument()           # offener Lauf: geschlossen mit dem letzten Fenster
+    >>> doc["erfasst"], doc["phasen"]
+    ([[10.0, 45.0]], [[12.346, 'ein'], [14.5, 'aus']])
+    >>> doc["fenster"]
+    [[40.0, 12.34, True, ''], [45.0, None, False, 'bewegung']]
+    >>> s.lauf_ende(50.0)
+    >>> s.dokument()["erfasst"]
+    [[10.0, 50.0]]
+    """
+
+    def __init__(
+        self,
+        quelle: str = QUELLE_SENSOR,
+        geraet: str = "",
+        rate_hz: float | int | None = None,
+        *,
+        prototyp: str = "",
+        hrv_core: str | None = None,
+    ) -> None:
+        self.quelle = str(quelle)
+        self.geraet = str(geraet)
+        self.rate_hz = _rate_hz(rate_hz)
+        self.prototyp = str(prototyp)
+        self.hrv_core = __version__ if hrv_core is None else str(hrv_core)
+        #: ``[von_s, bis_s]`` je Lauf; ``bis_s`` ``None`` = noch offen (nur der letzte)
+        self.laeufe: list[list[float | None]] = []
+        self.phasen: list[tuple[float, str]] = []
+        self.fenster_liste: list[tuple[float, float | None, bool, str]] = []
+        self._journal_kopf = False  # steht der Kopf („k“) schon im Journal?
+        self._journal_laeufe_ab = 0  # so viele Läufe sind im Journal eröffnet („e“)
+        self._journal_zu_ab = 0  # so viele Läufe sind im Journal geschlossen („x“)
+        self._journal_phasen_ab = 0
+        self._journal_fenster_ab = 0
+        self._journal_pfad: Path | None = None
+
+    # -- Sammeln ---------------------------------------------------------------
+
+    @property
+    def offen(self) -> bool:
+        """Ob gerade ein Lauf „Atmung erfassen“ läuft."""
+        return bool(self.laeufe) and self.laeufe[-1][1] is None
+
+    def lauf_beginn(self, t_s: float) -> None:
+        """„Atmung erfassen“ beginnt. Ein noch offener Lauf endet hier (keine Lücke)."""
+        t = _zeit(t_s)
+        if self.offen:
+            self.lauf_ende(t)
+        self.laeufe.append([t, None])
+
+    def lauf_ende(self, t_s: float) -> None:
+        """„Atmung erfassen“ endet; ohne offenen Lauf passiert nichts."""
+        if not self.offen:
+            return
+        von = self.laeufe[-1][0]
+        assert von is not None
+        self.laeufe[-1][1] = max(von, _zeit(t_s))
+
+    def phase(self, t_s: float, art: str) -> None:
+        """Beginn des Ein- (``"ein"``) oder Ausatmens (``"aus"``) auf der Wanduhr.
+
+        Raises:
+            ValueError: unbekannte Phase.
+        """
+        if art not in PHASEN:
+            raise ValueError(f"unbekannte Atemphase: {art!r}")
+        self.phasen.append((_zeit(t_s), art))
+
+    def fenster(self, t_ende_s: float, rate: float | None, gueltig: bool, grund: str = "") -> None:
+        """Ergebnis eines Prüffensters: Ende, Rate je Minute (``None`` = keine), gültig, Grund."""
+        self.fenster_liste.append((_zeit(t_ende_s), _rate(rate), bool(gueltig), str(grund or "")))
+
+    # -- Ableitungen -----------------------------------------------------------
+
+    @property
+    def leer(self) -> bool:
+        """Ob noch nichts gesammelt wurde — dann lohnt kein Beiwerk."""
+        return not (self.laeufe or self.phasen or self.fenster_liste)
+
+    def _letzter_zeitpunkt(self, ab: float) -> float:
+        """Letzter bekannter Zeitpunkt: letzte Phase oder letztes Fenster, sonst ``ab``."""
+        kandidaten = [ab]
+        if self.phasen:
+            kandidaten.append(max(t for t, _ in self.phasen))
+        if self.fenster_liste:
+            kandidaten.append(max(f[0] for f in self.fenster_liste))
+        return max(kandidaten)
+
+    def erfasst(self) -> list[list[float]]:
+        """Die Läufe als ``[von_s, bis_s]``; ein offener Lauf wird mit dem letzten bekannten
+        Zeitpunkt geschlossen (nur in der Ausgabe, der Sammler bleibt offen)."""
+        out: list[list[float]] = []
+        for von, bis in self.laeufe:
+            assert von is not None
+            out.append([von, self._letzter_zeitpunkt(von) if bis is None else bis])
+        return out
+
+    def dokument(self) -> dict[str, Any]:
+        """Das Beiwerk als Dict (``atem-v1``), Phasen zeitlich sortiert."""
+        return {
+            "schema": ATEM_SCHEMA,
+            "art": ATEM_ART,
+            "prototyp": self.prototyp,
+            "hrv_core": self.hrv_core,
+            "quelle": self.quelle,
+            "geraet": self.geraet,
+            "rate_hz": self.rate_hz,
+            "erfasst": self.erfasst(),
+            "phasen": [[t, art] for t, art in sorted(self.phasen, key=lambda p: p[0])],
+            "fenster": [list(f) for f in self.fenster_liste],
+        }
+
+    # -- Schreiben -------------------------------------------------------------
+
+    def schreiben(self, messdatei: Path | str) -> Path:
+        """Das Beiwerk neben die Messdatei schreiben (atomar); gibt den Pfad zurück."""
+        ziel = atem_pfad(messdatei)
+        tmp = ziel.with_suffix(ziel.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self.dokument(), f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, ziel)
+        return ziel
+
+    def _kopf(self) -> dict[str, Any]:
+        return {
+            "schema": ATEM_SCHEMA,
+            "art": ATEM_ART,
+            "prototyp": self.prototyp,
+            "hrv_core": self.hrv_core,
+            "quelle": self.quelle,
+            "geraet": self.geraet,
+            "rate_hz": self.rate_hz,
+        }
+
+    def journal_anhaengen(self, journal: Path | str) -> None:
+        """Neues (seit dem letzten Aufruf) an das Journal hängen, zuletzt ``fsync``.
+
+        Zeilen: ``["k", {kopf}]`` zuerst, dann ``["e", von_s]`` je eröffnetem Lauf,
+        ``["x", bis_s]`` je geschlossenem, ``["p", t_s, art]`` je Phase, ``["f", t_ende_s,
+        rate, gueltig, grund]`` je Fenster. Ein anderer Pfad als beim letzten Mal oder ein
+        verschwundenes Journal: alles noch einmal, mit Kopf. Die Zähler rücken erst nach dem
+        Schreiben vor — scheitert es, kommt beim nächsten Mal derselbe Stand.
+
+        >>> import tempfile
+        >>> ordner = Path(tempfile.mkdtemp())
+        >>> s = AtemSammler("sensor", "polar_h10", 50)
+        >>> s.lauf_beginn(1.0)
+        >>> s.phase(2.0, "ein")
+        >>> s.journal_anhaengen(ordner / "a.jsonl")
+        >>> _ = (ordner / "a.jsonl").open("a").write('["p", 3.0, "au')   # halbe Zeile
+        >>> s.phase(4.0, "aus")
+        >>> s.lauf_ende(5.0)
+        >>> s.journal_anhaengen(ordner / "a.jsonl")
+        >>> w = AtemSammler.aus_journal(ordner / "a.jsonl")
+        >>> w.phasen, w.laeufe, w.geraet
+        ([(2.0, 'ein'), (4.0, 'aus')], [[1.0, 5.0]], 'polar_h10')
+        """
+        pfad = Path(journal)
+        if pfad != self._journal_pfad or not pfad.exists():
+            self._journal_pfad = pfad
+            self._journal_kopf = False
+            self._journal_laeufe_ab = self._journal_zu_ab = 0
+            self._journal_phasen_ab = self._journal_fenster_ab = 0
+            pfad.unlink(missing_ok=True)  # ein fremder Rest bekäme sonst einen zweiten Kopf
+        n_zu = sum(1 for _, bis in self.laeufe if bis is not None)
+        neu_phasen = range(self._journal_phasen_ab, len(self.phasen))
+        neu_fenster = range(self._journal_fenster_ab, len(self.fenster_liste))
+        nichts_neu = (
+            self._journal_laeufe_ab == len(self.laeufe)
+            and self._journal_zu_ab == n_zu
+            and not neu_phasen
+            and not neu_fenster
+        )
+        if self._journal_kopf and nichts_neu:
+            return
+        halb = False
+        if pfad.exists() and pfad.stat().st_size:
+            with open(pfad, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                halb = f.read(1) != b"\n"
+        with open(pfad, "a", encoding="utf-8") as f:
+            if halb:
+                f.write("\n")
+            if not self._journal_kopf:
+                f.write(json.dumps(["k", self._kopf()], ensure_ascii=False) + "\n")
+            # Läufe in ihrer Reihenfolge: „e“ für jeden neuen, „x“ für jeden inzwischen
+            # geschlossenen — nur der letzte Lauf kann offen sein, darum reicht ein Zähler
+            # (geschlossen ≤ eröffnet).
+            for k in range(self._journal_zu_ab, len(self.laeufe)):
+                von, bis = self.laeufe[k]
+                if k >= self._journal_laeufe_ab:
+                    f.write(json.dumps(["e", von]) + "\n")
+                if bis is not None and k >= self._journal_zu_ab:
+                    f.write(json.dumps(["x", bis]) + "\n")
+            for k in neu_phasen:
+                f.write(json.dumps(["p", *self.phasen[k]], ensure_ascii=False) + "\n")
+            for k in neu_fenster:
+                f.write(json.dumps(["f", *self.fenster_liste[k]], ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        self._journal_kopf = True
+        self._journal_laeufe_ab = len(self.laeufe)
+        self._journal_zu_ab = n_zu
+        self._journal_phasen_ab = len(self.phasen)
+        self._journal_fenster_ab = len(self.fenster_liste)
+
+    @classmethod
+    def aus_journal(cls, journal: Path | str) -> AtemSammler:
+        """Den Sammler aus einem Journal wieder aufbauen (unlesbare Zeilen fallen weg).
+
+        Ein Lauf, den das Journal nicht schließt, bleibt offen — `dokument` schließt ihn
+        beim Schreiben mit dem letzten bekannten Zeitpunkt.
+        """
+        s = cls()
+        with open(journal, encoding="utf-8") as f:
+            for zeile in f:
+                try:
+                    eintrag = json.loads(zeile)
+                except ValueError:
+                    continue
+                if not isinstance(eintrag, list) or not eintrag:
+                    continue
+                art = eintrag[0]
+                try:
+                    if art == "k" and len(eintrag) >= 2 and isinstance(eintrag[1], dict):
+                        kopf = eintrag[1]
+                        s.quelle = str(kopf.get("quelle") or QUELLE_SENSOR)
+                        s.geraet = str(kopf.get("geraet") or "")
+                        s.rate_hz = _rate_hz(kopf.get("rate_hz"))
+                        s.prototyp = str(kopf.get("prototyp") or "")
+                        s.hrv_core = str(kopf.get("hrv_core") or __version__)
+                    elif art == "e" and len(eintrag) >= 2:
+                        s.lauf_beginn(float(eintrag[1]))
+                    elif art == "x" and len(eintrag) >= 2:
+                        s.lauf_ende(float(eintrag[1]))
+                    elif art == "p" and len(eintrag) >= 3 and eintrag[2] in PHASEN:
+                        s.phase(float(eintrag[1]), str(eintrag[2]))
+                    elif art == "f" and len(eintrag) >= 4:
+                        grund = eintrag[4] if len(eintrag) >= 5 and eintrag[4] is not None else ""
+                        s.fenster(float(eintrag[1]), eintrag[2], bool(eintrag[3]), str(grund))
+                except (TypeError, ValueError):
+                    continue
+        s._journal_kopf = True
+        s._journal_laeufe_ab = len(s.laeufe)
+        s._journal_zu_ab = sum(1 for _, bis in s.laeufe if bis is not None)
+        s._journal_phasen_ab = len(s.phasen)
+        s._journal_fenster_ab = len(s.fenster_liste)
+        s._journal_pfad = Path(journal)
+        return s
+
+
+# ---------------------------------------------------------------------------
+# Lesen
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class Atem:
+    """Ein gelesenes Atem-Beiwerk: Läufe, Phasen und Fenster auf der Wanduhr der Messung."""
+
+    quelle: str = QUELLE_SENSOR
+    geraet: str = ""
+    rate_hz: float | None = None
+    art: str = ATEM_ART
+    prototyp: str = ""
+    hrv_core: str = ""
+    #: ``(von_s, bis_s)`` je Lauf „Atmung erfassen“
+    erfasst: list[tuple[float, float]] = field(default_factory=list)
+    #: ``(t_s, "ein" | "aus")``, zeitlich sortiert
+    phasen: list[tuple[float, str]] = field(default_factory=list)
+    #: ``(t_ende_s, rate_pro_min | None, gueltig, grund)`` je Prüffenster
+    fenster: list[tuple[float, float | None, bool, str]] = field(default_factory=list)
+
+    @property
+    def dauer_erfasst_s(self) -> float:
+        """Summe aller Läufe in Sekunden."""
+        return float(sum(max(0.0, bis - von) for von, bis in self.erfasst))
+
+    def ist_erfasst(self, t_s: float) -> bool:
+        """Ob zur Zeit ``t_s`` die Atmung erfasst wurde (sonst: nicht gemessen)."""
+        return any(von <= t_s <= bis for von, bis in self.erfasst)
+
+    def phasen_zwischen(self, von_s: float, bis_s: float) -> list[tuple[float, str]]:
+        """Die Phasen mit ``von_s ≤ t < bis_s``."""
+        return [(t, art) for t, art in self.phasen if von_s <= t < bis_s]
+
+    def raten(self, *, nur_gueltig: bool = True) -> list[tuple[float, float]]:
+        """``(t_ende_s, rate_pro_min)`` der Fenster — ohne ``nur_gueltig`` auch ungültige
+        Fenster, sofern sie eine Rate tragen."""
+        return [
+            (t, rate)
+            for t, rate, gueltig, _ in self.fenster
+            if rate is not None and (gueltig or not nur_gueltig)
+        ]
+
+
+def _laeufe_lesen(roh: Any) -> list[tuple[float, float]]:
+    out: list[tuple[float, float]] = []
+    for lauf in roh if isinstance(roh, list) else []:
+        if not isinstance(lauf, list | tuple) or len(lauf) < 2 or lauf[0] is None:
+            continue
+        try:
+            von = float(lauf[0])
+            bis = von if lauf[1] is None else float(lauf[1])
+        except (TypeError, ValueError):
+            continue
+        out.append((von, max(von, bis)))
+    return out
+
+
+def _phasen_lesen(roh: Any) -> list[tuple[float, str]]:
+    out: list[tuple[float, str]] = []
+    for p in roh if isinstance(roh, list) else []:
+        if not isinstance(p, list | tuple) or len(p) < 2 or p[1] not in PHASEN:
+            continue
+        try:
+            out.append((float(p[0]), str(p[1])))
+        except (TypeError, ValueError):
+            continue
+    return sorted(out, key=lambda p: p[0])
+
+
+def _fenster_lesen(roh: Any) -> list[tuple[float, float | None, bool, str]]:
+    out: list[tuple[float, float | None, bool, str]] = []
+    for f in roh if isinstance(roh, list) else []:
+        if not isinstance(f, list | tuple) or len(f) < 3:
+            continue
+        try:
+            t = float(f[0])
+        except (TypeError, ValueError):
+            continue
+        grund = f[3] if len(f) >= 4 and f[3] is not None else ""
+        out.append((t, _rate(f[1]), bool(f[2]), str(grund)))
+    return out
+
+
+def atem_laden(pfad: Path | str) -> Atem:
+    """Ein Atem-Beiwerk lesen — tolerant: fehlende oder kaputte Listen sind leer.
+
+    Raises:
+        ValueError: kein Atem-Beiwerk (kein JSON-Objekt oder ``schema`` nicht ``atem-v1``).
+    """
+    with open(pfad, encoding="utf-8") as f:
+        doc = json.load(f)
+    if not isinstance(doc, dict) or doc.get("schema") != ATEM_SCHEMA:
+        raise ValueError(f"kein Atem-Beiwerk: {pfad}")
+    return Atem(
+        quelle=str(doc.get("quelle") or QUELLE_SENSOR),
+        geraet=str(doc.get("geraet") or ""),
+        rate_hz=_rate_hz(doc.get("rate_hz")),
+        art=str(doc.get("art") or ATEM_ART),
+        prototyp=str(doc.get("prototyp") or ""),
+        hrv_core=str(doc.get("hrv_core") or ""),
+        erfasst=_laeufe_lesen(doc.get("erfasst")),
+        phasen=_phasen_lesen(doc.get("phasen")),
+        fenster=_fenster_lesen(doc.get("fenster")),
+    )
+
+
+__all__ = [
+    "ATEM_ART",
+    "ATEM_ENDUNG",
+    "ATEM_JOURNAL_ENDUNG",
+    "ATEM_SCHEMA",
+    "PHASEN",
+    "QUELLE_SENSOR",
+    "QUELLE_TAKT",
+    "Atem",
+    "AtemSammler",
+    "atem_journal_pfad",
+    "atem_laden",
+    "atem_pfad",
+]

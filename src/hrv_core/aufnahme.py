@@ -405,7 +405,8 @@ def backup_entfernen(pfad: Path | str) -> None:
     oder wenn die Person es verwirft.
 
     Begleit-Journale hängen am Stamm des Kopfs: ``.backup_<ts>_ecg.jsonl`` (EKG,
-    `hrv_core.ekg`), ``.backup_<ts>_mitschnitt.jsonl`` (Rohmitschnitt, `hrv_core.mitschnitt`).
+    `hrv_core.ekg`), ``.backup_<ts>_atem.jsonl`` (Atemphasen, `hrv_core.atem`),
+    ``.backup_<ts>_mitschnitt.jsonl`` (Rohmitschnitt, `hrv_core.mitschnitt`).
     Wer eines davon behalten will, nimmt es vorher an sich (Diagnosemodus V5).
 
     >>> import tempfile

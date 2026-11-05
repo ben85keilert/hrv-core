@@ -273,3 +273,72 @@ def test_adresse_ueberlebt_den_round_trip_und_fehlt_ohne_wert():
     assert rec.adresse == "E2:B4:CC:3F:08:44" and "adresse" not in rec.extra
     assert rec.to_dict()["adresse"] == "E2:B4:CC:3F:08:44"
     assert "adresse" not in Recording.from_dict(ROH).to_dict()
+
+
+# ---------------------------------------------------------------------------
+# atem-v1 (A3, 5.11.2026) und das Kopffeld `atmung` in raw-v1 (P125)
+# ---------------------------------------------------------------------------
+
+#: Erfunden, kein echter Messwert.
+ATEM = {
+    "schema": "atem-v1",
+    "art": "prototyp",
+    "prototyp": "hrv_core.prototyp.atemzuege",
+    "hrv_core": "0.9.0",
+    "quelle": "sensor",
+    "geraet": "polar_h10",
+    "rate_hz": 50,
+    "erfasst": [[10.0, 50.0]],
+    "phasen": [[12.346, "ein"], [14.5, "aus"]],
+    "fenster": [[40.0, 12.35, True, ""], [45.0, None, False, "bewegung"]],
+}
+
+
+def test_atem_beiwerk_bleibt_vollstaendig_und_wird_erkannt(tmp_path):
+    ordner = tmp_path / "quelle"
+    ordner.mkdir()
+    quelle = ordner / "sensor_1900-01-01_000000.json"
+    _schreibe(quelle, ROH)
+    beiwerk = ordner / "sensor_1900-01-01_000000_atem.json"
+    _schreibe(beiwerk, ATEM)
+    assert deid.format_erkennen(ATEM, beiwerk.name) == "atem-v1"
+    assert deid.format_erkennen({}, beiwerk.name) == "atem-v1"  # auch am Suffix
+    assert deid.format_erkennen(ATEM, "irgendwas.json") == "atem-v1"  # auch am Schema
+    assert "_atem.json" in deid.BEIWERK_SUFFIXE and deid.REGELN["atem-v1"] is deid.ATEM_REGELN
+    assert set(deid.ATEM_REGELN) == set(ATEM)
+
+    ziele = deid.deidentifizieren(quelle, tmp_path / "p001", mit_beiwerk=True)
+    assert sorted(z.name for z in ziele) == sorted([quelle.name, beiwerk.name])
+    kopie = json.loads((tmp_path / "p001" / beiwerk.name).read_text(encoding="utf-8"))
+    assert kopie == ATEM  # alle Felder bleiben, die Listen als Ganzes
+    assert deid.pruefen(tmp_path / "p001").ok
+
+    # Ein fremdes Feld (etwa Rohproben) fällt weg und lässt `pruefen` ablehnen
+    _schreibe(tmp_path / "p001" / "sensor_x_atem.json", dict(ATEM, proben=[[0, 1, 2]]))
+    bericht = deid.pruefen(tmp_path / "p001")
+    gruende = {p.name: g for p, g in bericht.ablehnungen}
+    assert gruende == {"sensor_x_atem.json": "unbekanntes Feld: proben"}
+
+
+def test_raw_v1_behaelt_das_kopffeld_atmung(tmp_path):
+    from hrv_core.recording import Recording
+
+    atmung = {"art": "getaktet", "takt_pro_min": 6.0}
+    roh = dict(ROH, patient_id=None, behandlung_id=None)
+    roh["atmung"] = atmung
+    # deid: als Ganzes behalten, nicht gemeldet
+    kopie, meldungen = deid.deidentifizieren_dict(roh, "sensor_1900-01-01_000000.json")
+    assert kopie["atmung"] == atmung
+    assert not any(p.startswith("atmung") for _, p in meldungen)
+    (tmp_path / "selbst").mkdir()
+    _schreibe(tmp_path / "selbst" / "sensor_a.json", roh)
+    assert deid.pruefen(tmp_path).ok
+    # Rundreise: `extra` trägt es, `to_dict` schreibt es zurück
+    rec = Recording.from_dict(roh)
+    assert rec.extra["atmung"] == atmung
+    assert rec.to_dict()["atmung"] == atmung
+    assert Recording.from_dict(rec.to_dict()).to_dict()["atmung"] == atmung
+    assert "atmung" not in Recording.from_dict(ROH).to_dict()
+    for art, feld in (("spontan", {}), ("uebung", {"uebung": "2ATPZC"})):
+        doc = dict(roh, atmung={"art": art, **feld})
+        assert Recording.from_dict(doc).to_dict()["atmung"] == {"art": art, **feld}

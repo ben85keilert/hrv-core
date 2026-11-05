@@ -4,7 +4,7 @@ Zwei Aufgaben, beide ohne Personenbezug im Code:
 
 ``deidentifizieren(quelle, zielordner)``
     kopiert eine Messdatei (``raw-v1``, Backup, ``corrected-v1``, Sidecar
-    ``analysis-v1``, ``truth-v1``, ``sitzung-v1``, EKG/PPG-Rohdaten) über eine
+    ``analysis-v1``, ``truth-v1``, ``sitzung-v1``, ``atem-v1``, EKG/PPG-Rohdaten) über eine
     **Weißliste je Feld** (`REGELN`): Personenfelder werden ``null``
     (``patient_id``, ``behandlung_id``, ``subject_id``, BLE-``adresse``), der
     Gerätename auf das Modell gekürzt (``"Polar H10 ABC123"`` → ``"Polar H10"``,
@@ -61,6 +61,7 @@ BEIWERK_SUFFIXE = (
     "_ecg.json",
     "_ppg.json",
     "_truth.json",
+    "_atem.json",  # `hrv_core.atem` (`atem-v1`)
     mitschnitt.ENDUNG,
 )
 ORDNER_MUSTER = re.compile(r"^(p\d{3}|selbst)$")
@@ -139,6 +140,9 @@ RAW_REGELN: dict[str, Any] = {
     "ecg_aufzeichnung": KEEP,
     "ppg_aufzeichnung": KEEP,
     "ppi_pakete": KEEP,
+    # Protokollfeld „Atmung“ der trainingsapp (P125): `art` (spontan/getaktet/uebung),
+    # `takt_pro_min`, `uebung` (Kurzcode) — als Ganzes, nichts davon ist personenbezogen
+    "atmung": KEEP,
     "titel": FREITEXT,
     "notiz": FREITEXT,
     "ereignisse": [EREIGNIS_REGELN],
@@ -234,6 +238,23 @@ PPG_REGELN: dict[str, Any] = {
         "frame_sample_counts",
     )
 }
+#: atem-v1 (`hrv_core.atem`): Ergebnis der Atemerfassung — Läufe, Phasen, Fenster auf der
+#: Wanduhr; `geraet` ist die Profil-ID (``polar_h10``), nie Name oder Adresse. Alles bleibt.
+ATEM_REGELN: dict[str, Any] = {
+    f: KEEP
+    for f in (
+        "schema",
+        "art",
+        "prototyp",
+        "hrv_core",
+        "quelle",
+        "geraet",
+        "rate_hz",
+        "erfasst",
+        "phasen",
+        "fenster",
+    )
+}
 TEILNEHMER_REGELN: dict[str, Any] = {
     "geraet": GERAET,
     "adresse": NULL,  # BLE-MAC: Pseudo-Identifikator des Geräts
@@ -263,6 +284,7 @@ REGELN: dict[str, dict[str, Any]] = {
     "sitzung-v1": SITZUNG_REGELN,
     "ecg": ECG_REGELN,
     "ppg": PPG_REGELN,
+    "atem-v1": ATEM_REGELN,
 }
 
 
@@ -451,6 +473,8 @@ def format_erkennen(daten: dict, dateiname: str) -> str | None:
     'ecg'
     >>> format_erkennen({"schema": "sitzung-v1"}, "sitzung_1.json")
     'sitzung-v1'
+    >>> format_erkennen({"schema": "atem-v1"}, "x.json"), format_erkennen({}, "sensor_1_atem.json")
+    ('atem-v1', 'atem-v1')
     """
     schema = daten.get("schema")
     if isinstance(schema, str) and schema in REGELN:
@@ -463,6 +487,8 @@ def format_erkennen(daten: dict, dateiname: str) -> str | None:
         return "ecg"
     if dateiname.endswith("_ppg.json"):
         return "ppg"
+    if dateiname.endswith("_atem.json"):
+        return "atem-v1"
     if "messungen" in daten or dateiname.startswith(("sensor_", ".backup_")):
         return "raw-v1"
     return None

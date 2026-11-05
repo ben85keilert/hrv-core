@@ -1,6 +1,6 @@
 # Dateiformate, die hrv-core liest und schreibt
 
-Stand 4.11.2026. Die maßgeblichen Verträge liegen bei den Apps:
+Stand 5.11.2026. Die maßgeblichen Verträge liegen bei den Apps:
 `praxis_gui/docs/sensor_hrv.md` (Feldreferenz `raw-v1`, Schreiber) und
 `trainingsapp/docs/kompatibilitaet.md` (Abgleich beider Apps, Erweiterungen).
 Diese Seite ist der Index aus Sicht der Bibliothek: welches Modul welches Format
@@ -30,6 +30,7 @@ während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxi
 | `start_utc` | ja | `YYYY-MM-DDTHH:MM:SSZ`; bestimmt den Dateinamen (`messdatei_name`) |
 | `batterie_prozent`, `ecg_aufzeichnung`, `ppg_aufzeichnung` | ja | |
 | `ppi_pakete` | nur Geräte mit PPI | Vertrag 3b; `ppi.py` leitet daraus Zeitachse, Nähte, Wiederaufnahme ab |
+| `atmung` | nein (trainingsapp, seit 5.11.2026) | Protokollfeld „Atmung“ (P125, Vertrag §3/§5 der trainingsapp): `{"art": "spontan" \| "getaktet" \| "uebung", "takt_pro_min": 6.0, "uebung": "<Kurzcode>"}` — `takt_pro_min` nur bei `getaktet`, `uebung` nur bei `uebung`; fehlt = unbekannt (Altdateien). Bleibt über `extra` erhalten, `deid` behält es als Ganzes |
 | `titel`, `notiz` | ja | Freitext; `ereignisse.metadaten_schreiben` darf nur diese und `ereignisse` ändern |
 | `ereignisse[]` | ja | Notizanker (`ereignisse.py`): `beat_index`, `dt_s`, `t_wall_s`, `t_s`, `wall_time`, `text`; Erweiterungen `uebungen[]` (Kurzcodes) und `marke` (`MARKE_FELDER`: `quelle`, `art`, `spur`, `einheit`, `name`, `runde`, `von`, `zaehlt`, `soll_s`, `profil`, seit 19.10.2026 `feld` und `wert` für `person/leistung`, seit 27.10.2026 `kopf_s`/`endteil_s` an der Start-Notiz eines Abschnitts — Rechenbereich über die Grenzen hinaus (positiv) oder innerhalb (negativ); ein eigener Abschnitt der Person ist ein Paar `person/abschnitt` + `person/ende` mit `spur` = Kennung `seg-…`, `ausschnitte.paare_aus_notizen`; seit 29.10.2026 `kontext`/`haltung` an `person/erholung` — Ende einer Belastung, woran und in welcher Haltung die Person sich erholt, `herzfrequenz.hrr_erholung`); alt: `chart_x` |
 | `messungen[]` | ja | `t_s` (Herzuhr), `t_wall_s`/`tw_src` (Wanduhr, `m`/`r`/`g`), `hf_bpm`, `rr_ms` |
@@ -37,7 +38,7 @@ während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxi
 
 Unbekannte Felder überleben einen Round-Trip (`Recording.extra`). Beim Schreiben
 wird eine vorhandene Datei nie ersetzt (`recording.freier_pfad`: `_1`, `_2` …).
-Dateinamen mit `_analyzed`, `_ecg`, `_ppg`, `_truth` und `__cNN` sind keine
+Dateinamen mit `_analyzed`, `_ecg`, `_ppg`, `_truth`, `_atem` und `__cNN` sind keine
 Messdateien (`ist_messdatei`), Endungen außer `.json` ebenso (`_mitschnitt.jsonl`).
 
 ## Crash-Backup `.backup_<UTC-Start>.json` + `.jsonl`
@@ -57,7 +58,8 @@ und Journal** (lange Aufnahmen: vorher wurde alle 15 s die ganze Datei neu gesch
 - `backup_lesen` setzt beides zusammen; ein Kopf **mit** `messungen` (Backup von vor dem
   Journal, praxis_gui) wird weiter gelesen. `_wiederherstellung` und `_journal` tragen nur
   `.backup_*`-Dateien; `deid` entfernt sie.
-- **Begleit-Journale** am Stamm des Kopfs: `.backup_<Start>_ecg.jsonl` (EKG, `ekg`) und
+- **Begleit-Journale** am Stamm des Kopfs: `.backup_<Start>_ecg.jsonl` (EKG, `ekg`),
+  `.backup_<Start>_atem.jsonl` (Atemphasen, `atem`, seit 5.11.2026) und
   `.backup_<Start>_mitschnitt.jsonl` (Rohmitschnitt, `mitschnitt`). `backup_entfernen` löscht
   sie mit (seit 0.6.0) — wer eines behalten will, macht vorher daraus das Beiwerk der
   Messdatei. Das EKG-Journal schreibt seit 0.6.0 wie das der Schläge: `fsync`, eine halbe
@@ -128,6 +130,39 @@ später praxis_gui (`rohlog`). JSON Lines, nur angehängt, jede Zeile `{"art": �
   Herstellerteil bleibt), kürzt den Gerätenamen auf das Modell — auch in Protokollzeilen —,
   entfernt Zeilen der Merkmale 0x2A00/0x2A23/0x2A25 und alles, was `deid.MITSCHNITT_REGELN`
   nicht kennt; `deid.pruefen` lehnt einen Mitschnitt ab, an dem das noch etwas ändern würde.
+
+## `atem-v1` — Beiwerk `sensor_<ts>_atem.json`
+
+`atem` (`AtemSammler`, `atem_laden`, `atem_pfad`, `atem_journal_pfad`), seit 5.11.2026
+(trainingsapp `docs/plan_beschleunigung.md` §7.4/§8: **Ergebnisse statt Rohdaten**, P123).
+Das Ergebnis der Atemerfassung aus dem Beschleunigungssensor neben der Messdatei; der Inhalt
+stammt aus einem Prototyp (`hrv_core.prototyp`, Kennzeichnung `art`/`prototyp`), das Format ist
+stabil. Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (`t_wall_s` wie die Schläge),
+3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetometer, keine Korrekturen
+(±1 steht in der Zeitleiste der Einheit).
+
+| Feld | Von hrv-core gesetzt | Anmerkung |
+|---|---|---|
+| `schema` | ja | `atem-v1` |
+| `art`, `prototyp` | ja | `prototyp` und der Modulname des Verfahrens (`hrv_core.prototyp.atemzuege`) — der Inhalt ist nie Grundlage gespeicherter Kennzahlen |
+| `hrv_core` | ja | Version der Bibliothek beim Schreiben |
+| `quelle` | ja (vom Aufrufer) | `sensor` (Beschleunigung); `takt` ist für den Taktgeber reserviert |
+| `geraet` | ja (vom Aufrufer) | Profil-ID (`polar_h10`, `verity_sense`) — nie Name, Adresse oder Seriennummer |
+| `rate_hz` | ja (vom Aufrufer) | Abtastrate der Beschleunigung, `null` wenn keine |
+| `erfasst[]` | ja | `[von_s, bis_s]` je Lauf „Atmung erfassen“; ohne Eintrag ist eine Lücke „nicht gemessen“, nicht „kein Atemzug“. Ein beim Schreiben noch offener Lauf endet mit dem letzten bekannten Zeitpunkt (letzte Phase oder letztes Fenster, sonst `von_s`) |
+| `phasen[]` | ja | `[t_s, "ein" \| "aus"]` — Beginn von Ein- bzw. Ausatmen, zeitlich sortiert |
+| `fenster[]` | ja | `[t_ende_s, rate_pro_min, gueltig, grund]` je Prüffenster (alle 5 s, 30 s lang, Ende des Fensters); ungültig: `rate_pro_min = null` und `grund` als snake_case-Code aus dem Prototyp (`bewegung`, `amplitude_klein`, `unregelmaessig`, `zu_wenig_zyklen`, `kein_gipfel` …), sonst `""` |
+
+- **Journal** `.backup_<ts>_atem.jsonl` neben dem Crash-Backup (`AtemSammler.journal_anhaengen`,
+  `aus_journal`): JSON Lines, jede Zeile für sich abgeschlossen, zuletzt `fsync` — `["k", {kopf}]`,
+  `["e", von_s]` (Lauf auf), `["x", bis_s]` (Lauf zu), `["p", t_s, "ein"|"aus"]`,
+  `["f", t_ende_s, rate, gueltig, grund]`. Nur Neues wird angehängt; eine halbe Zeile wird
+  abgeschlossen statt fortgesetzt, ein anderer oder verschwundener Pfad bekommt alles samt Kopf.
+  Ein offener Lauf bleibt im Journal offen. `backup_entfernen` löscht das Journal mit.
+- **Lesen:** `atem_laden` ist tolerant — fehlende oder kaputte Listen sind leer, unbekannte
+  Phasen und unlesbare Zeilen fallen weg; nur ein fremdes `schema` ist ein Fehler.
+- `deid.ATEM_REGELN` behält alle Felder (Listen als Ganzes); `deid.format_erkennen` erkennt
+  `schema` und die Endung `_atem.json`.
 
 ## PMD-Dekoder `geraete.pmd`
 
