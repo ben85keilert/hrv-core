@@ -24,7 +24,8 @@ fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0
   Wertehierarchie — seit 29.10.2026), `ekg` (EKG-Beiwerk), `atem` (Atemphasen `atem-v1`, seit 5.11.2026), `mitschnitt` (Rohmitschnitt
   `mitschnitt-v1`, seit 0.6.0), `geraete/` (Dekoder ohne Bluetooth: `pmd` — EKG, PPI,
   Beschleunigung), `prototyp/` (Verfahren nach moderater Reife, gekennzeichnet, nie Grundlage
-  gespeicherter Kennzahlen: `wiederholungen` seit 0.8.0, `atemzuege` — Atemzüge und Atemphasen
+  gespeicherter Kennzahlen: `wiederholungen` — Satzfenster seit 0.8.0, live rahmenweise mit
+  Vorlagenkatalog (`WdhLive`) seit 0.11.0 —, `atemzuege` — Atemzüge und Atemphasen
   live aus der Beschleunigung — seit 0.9.0, `atem_hrv` — Atem-HRV je Atemzug aus Atemphasen und
   RR-Abständen — seit 0.10.0).
 - `tests/fixtures/` Messdateien ohne Personenbezug · `tests/golden/trainingsapp/` Golden Master

@@ -17,8 +17,11 @@ Regeln:
 
 Module:
 
-- `wiederholungen` — Wiederholungen eines Satzes aus der Beschleunigung (seit 0.8.0; Eingang mit
-  Ausnahme, Entscheidung 22 in hrv-research).
+- `wiederholungen` — Wiederholungen aus der Beschleunigung: `zaehlen_fenster` über ein
+  bekanntes Satzfenster (seit 0.8.0, bis 0.10.0 ``zaehlen``; Eingang mit Ausnahme, Entscheidung
+  22 in hrv-research) und `WdhLive`, kausal und rahmenweise mit Vorlagenkatalog `VORLAGEN`
+  (Kniebeuge, Rudern, Liegestütz …), Meldung je Wiederholung samt Rücknahme, `zaehlen` als
+  Offline-Hülle darüber (seit 0.11.0; Eingang mit Ausnahme, Entscheidung 26 in hrv-research).
 - `atemzuege` — Atemzüge und Atemphasen live aus der Beschleunigung, kausal mit Gültigkeit je
   Fenster (seit 0.9.0; Eingang mit Ausnahme, Entscheidung 24 in hrv-research; Ergebnis im
   Beiwerk `atem-v1`).
