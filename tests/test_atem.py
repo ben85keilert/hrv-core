@@ -241,3 +241,195 @@ def test_beiwerk_haengt_am_stamm_und_bleibt_bei_deid_vollstaendig(tmp_path) -> N
     assert deid.format_erkennen({}, pfad.name) == "atem-v1"
     neu, meldungen = deid.deidentifizieren_dict(doc, pfad.name)
     assert neu == doc and meldungen == []
+
+
+# ---------------------------------------------------------------------------
+# Soll-Phasen des Taktgebers: Feld `takt` (P141, 5.11.2026)
+# ---------------------------------------------------------------------------
+
+
+def _sammler_mit_takt() -> atem.AtemSammler:
+    s = _sammler()
+    s.takt_beginn(10.0, "Box 4-4", 7.5)
+    s.takt_phase(10.0, "ein")
+    s.takt_phase(14.0, "aus")
+    s.takt_phase(18.0, "ein")
+    s.takt_ende(22.0)
+    # Zweiter Lauf nach Tempoänderung: andere Rate, dieselbe Phasenliste
+    s.takt_beginn(30.0, "Box 4-4", 10.0)
+    s.takt_phase(30.0, "ein")
+    s.takt_phase(33.123456, "aus")
+    s.takt_ende(36.0)
+    return s
+
+
+def test_takt_rundreise_und_ohne_takt_unveraendert(tmp_path) -> None:
+    """Mit Soll-Phasen steht `takt` hinten als letztes Feld; ohne bleibt die Datei wie vor
+    0.13.0 (Rundreise ohne `takt` prüft `test_rundreise_dokument_und_datei`)."""
+    assert "takt" not in _sammler().dokument() and _sammler().takt() is None
+    s = _sammler_mit_takt()
+    assert not s.takt_offen
+    doc = s.dokument()
+    assert list(doc)[-2:] == ["fenster", "takt"]
+    assert doc["takt"] == {
+        "name": "Box 4-4",
+        "rate_pro_min": 10.0,  # der letzte Lauf
+        "phasen": [
+            [10.0, "ein"],
+            [14.0, "aus"],
+            [18.0, "ein"],
+            [30.0, "ein"],
+            [33.123, "aus"],  # 3 Nachkommastellen
+        ],
+        "laeufe": [[10.0, 22.0, "Box 4-4", 7.5], [30.0, 36.0, "Box 4-4", 10.0]],
+    }
+    # Sensor-Teil unverändert
+    assert doc["phasen"] == [[12.346, "ein"], [14.5, "aus"], [16.7, "ein"]]
+    assert doc["erfasst"] == [[10.0, 50.0]]
+
+    pfad = s.schreiben(tmp_path / "sensor_2026-11-05_061500.json")
+    a = atem.atem_laden(pfad)
+    assert a.takt is not None
+    assert a.takt.name == "Box 4-4" and a.takt.rate_pro_min == 10.0
+    assert a.takt.phasen == [(t, art) for t, art in doc["takt"]["phasen"]]
+    assert a.takt.laeufe == [(10.0, 22.0, "Box 4-4", 7.5), (30.0, 36.0, "Box 4-4", 10.0)]
+    assert a.takt.ist_getaktet(20.0) and not a.takt.ist_getaktet(25.0)
+    assert a.takt_phasen_zwischen(14.0, 30.0) == [(14.0, "aus"), (18.0, "ein")]
+    assert a.phasen_zwischen(14.0, 30.0) == [(14.5, "aus"), (16.7, "ein")]  # Ist bleibt getrennt
+    # Zweite Rundreise ist byteidentisch
+    s2 = atem.AtemSammler(a.quelle, a.geraet, a.rate_hz, prototyp=a.prototyp, hrv_core=a.hrv_core)
+    for von, bis in a.erfasst:
+        s2.lauf_beginn(von)
+        s2.lauf_ende(bis)
+    for t, art in a.phasen:
+        s2.phase(t, art)
+    for t, rate, gueltig, grund in a.fenster:
+        s2.fenster(t, rate, gueltig, grund)
+    for von, bis, name, rate in a.takt.laeufe:
+        s2.takt_beginn(von, name, rate)
+        s2.takt_ende(bis)
+    for t, art in a.takt.phasen:
+        s2.takt_phase(t, art)
+    assert s2.dokument() == doc
+
+
+def test_takt_allein_lohnt_ein_beiwerk_und_offener_takt_wird_geschlossen() -> None:
+    s = atem.AtemSammler("sensor", "polar_h10", None)
+    s.takt_beginn(5.0, "Metronom", 6.0)
+    assert s.leer  # ein Takt ohne Soll-Phase: nichts zu schreiben
+    assert s.dokument().get("takt") is None
+    s.takt_phase(5.0, "ein")
+    assert not s.leer and s.takt_offen
+    assert s.dokument()["takt"]["laeufe"] == [[5.0, 5.0, "Metronom", 6.0]]
+    s.takt_phase(15.0, "aus")
+    s.takt_phase(12.0, "ein")  # kommt nach, liegt davor: sortiert, der Lauf endet bei 15
+    doc = s.dokument()
+    assert doc["takt"]["phasen"] == [[5.0, "ein"], [12.0, "ein"], [15.0, "aus"]]
+    assert doc["takt"]["laeufe"] == [[5.0, 15.0, "Metronom", 6.0]]
+    assert doc["erfasst"] == [] and doc["phasen"] == [] and doc["fenster"] == []
+    assert s.takt_laeufe == [[5.0, None, "Metronom", 6.0]]  # der Sammler bleibt offen
+    # Zweiter Beginn schließt den offenen Lauf an seiner Stelle; Ende ohne Lauf tut nichts
+    s.takt_beginn(20.0, "Metronom", 8.0)
+    assert s.takt_laeufe == [[5.0, 20.0, "Metronom", 6.0], [20.0, None, "Metronom", 8.0]]
+    s.takt_ende(19.0)  # vor dem Beginn: auf den Beginn gezogen
+    s.takt_ende(99.0)
+    assert s.takt_laeufe[-1] == [20.0, 20.0, "Metronom", 8.0]
+    assert s.dokument()["takt"]["rate_pro_min"] == 8.0
+    with pytest.raises(ValueError):
+        s.takt_phase(1.0, "halten")
+    # Soll-Phasen ohne Lauf: Name leer, Rate None
+    t = atem.AtemSammler()
+    t.takt_phase(1.0, "ein")
+    assert t.takt() == {"name": "", "rate_pro_min": None, "phasen": [[1.0, "ein"]], "laeufe": []}
+
+
+def test_takt_im_journal_nur_neues_und_wiederaufbau(tmp_path) -> None:
+    s = atem.AtemSammler("sensor", "polar_h10", 50, prototyp="p")
+    s.lauf_beginn(1.0)
+    s.takt_beginn(1.0, "Box 4-4", 7.5)
+    s.takt_phase(1.0, "ein")
+    j = tmp_path / ".backup_x_atem.jsonl"
+    s.journal_anhaengen(j)
+    zeilen = [json.loads(z) for z in j.read_text(encoding="utf-8").splitlines()]
+    assert zeilen[1:] == [["e", 1.0], ["t", 1.0, "Box 4-4", 7.5], ["q", 1.0, "ein"]]
+    s.journal_anhaengen(j)  # nichts Neues
+    assert len(j.read_text(encoding="utf-8").splitlines()) == 4
+    s.takt_phase(5.0, "aus")
+    s.takt_ende(9.0)
+    s.takt_beginn(20.0, "Box 4-4", 10.0)
+    s.phase(6.0, "aus")
+    s.journal_anhaengen(j)
+    zeilen = [json.loads(z) for z in j.read_text(encoding="utf-8").splitlines()]
+    assert [z[0] for z in zeilen] == ["k", "e", "t", "q", "p", "u", "t", "q"]
+    assert zeilen[5] == ["u", 9.0] and zeilen[6] == ["t", 20.0, "Box 4-4", 10.0]
+    w = atem.AtemSammler.aus_journal(j)
+    assert w.takt_laeufe == [[1.0, 9.0, "Box 4-4", 7.5], [20.0, None, "Box 4-4", 10.0]]
+    assert w.takt_offen and w.takt_phasen == [(1.0, "ein"), (5.0, "aus")]
+    assert w.dokument() == s.dokument()
+    # Weiter im selben Journal ohne zweiten Kopf, auch nach dem Wiederaufbau
+    w.takt_phase(21.0, "ein")
+    w.takt_ende(25.0)
+    w.journal_anhaengen(j)
+    zeilen = [json.loads(z) for z in j.read_text(encoding="utf-8").splitlines()]
+    assert sum(1 for z in zeilen if z[0] == "k") == 1
+    assert zeilen[-2:] == [["u", 25.0], ["q", 21.0, "ein"]]
+    assert atem.AtemSammler.aus_journal(j).dokument() == w.dokument()
+    # Unlesbares im Takt-Teil fällt weg
+    j.write_text(
+        "\n".join(
+            [
+                '["t", 1.0]',  # ohne Name und Rate
+                '["t", "x", "a", 1]',  # keine Zahl
+                '["q", 2.0, "ein"]',
+                '["q", 3.0, "halten"]',
+                '["u", "x"]',
+                '["u", 4.0]',
+                '["t", 5.0, null, "nan"]',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    w = atem.AtemSammler.aus_journal(j)
+    assert w.takt_laeufe == [[1.0, 4.0, "", None], [5.0, None, "", None]]
+    assert w.takt_phasen == [(2.0, "ein")]
+
+
+def test_laden_ohne_und_mit_kaputtem_takt(tmp_path) -> None:
+    pfad = tmp_path / "sensor_x_atem.json"
+    # Datei vor 0.13.0: kein Feld → None, nichts sonst ändert sich
+    pfad.write_text(json.dumps({"schema": "atem-v1", "phasen": [[1.0, "ein"]]}), encoding="utf-8")
+    a = atem.atem_laden(pfad)
+    assert a.takt is None and a.takt_phasen_zwischen(0.0, 10.0) == []
+    assert a.phasen == [(1.0, "ein")]
+    # Tolerant: kaputte Teile sind leer, kein Objekt ist wie kein Feld
+    pfad.write_text(
+        json.dumps(
+            {
+                "schema": "atem-v1",
+                "takt": {
+                    "name": None,
+                    "rate_pro_min": "7.5",
+                    "phasen": [[3.0, "aus"], [1.0, "ein"], [2.0, "halten"], "x"],
+                    "laeufe": [[1.0, None, "A"], [5.0, 4.0, None, "nan"], [2.0], "x"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    a = atem.atem_laden(pfad)
+    assert a.takt == atem.Takt(
+        name="",
+        rate_pro_min=7.5,
+        phasen=[(1.0, "ein"), (3.0, "aus")],
+        laeufe=[(1.0, 1.0, "A", None), (5.0, 5.0, "", None)],
+    )
+    assert a.takt_phasen_zwischen(1.0, 3.0) == [(1.0, "ein")]
+    pfad.write_text(json.dumps({"schema": "atem-v1", "takt": [1, 2]}), encoding="utf-8")
+    assert atem.atem_laden(pfad).takt is None
+
+
+def test_takt_bleibt_bei_deid_vollstaendig(tmp_path) -> None:
+    doc = _sammler_mit_takt().dokument()
+    pfad = _sammler_mit_takt().schreiben(tmp_path / "sensor_2026-11-05_061500.json")
+    neu, meldungen = deid.deidentifizieren_dict(doc, pfad.name)
+    assert neu == doc and meldungen == [] and neu["takt"]["laeufe"] == doc["takt"]["laeufe"]

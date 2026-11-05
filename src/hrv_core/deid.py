@@ -255,6 +255,7 @@ ATEM_REGELN: dict[str, Any] = {
         "erfasst",
         "phasen",
         "fenster",
+        "takt",  # Soll-Phasen des Taktgebers (P141), optional, als Ganzes
     )
 }
 TEILNEHMER_REGELN: dict[str, Any] = {

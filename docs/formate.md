@@ -169,15 +169,24 @@ Schläge), 3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetomete
 | `erfasst[]` | ja | `[von_s, bis_s]` je Lauf „Atmung erfassen“; ohne Eintrag ist eine Lücke „nicht gemessen“, nicht „kein Atemzug“. Ein beim Schreiben noch offener Lauf endet mit dem letzten bekannten Zeitpunkt (letzte Phase oder letztes Fenster, sonst `von_s`) |
 | `phasen[]` | ja | `[t_s, "ein" \| "aus"]` — Beginn von Ein- bzw. Ausatmen, zeitlich sortiert |
 | `fenster[]` | ja | `[t_ende_s, rate_pro_min, gueltig, grund]` je Prüffenster (alle 5 s, 30 s lang, Ende des Fensters); ungültig: `rate_pro_min = null` und `grund` als snake_case-Code aus dem Prototyp — der **erste** Grund seiner Prüfreihenfolge (`hrv_core.prototyp.atemzuege`, Modultext Punkt 7: `bewegung` → `amplitude_klein` → `kein_gipfel` / `gipfel_undeutlich` → `zu_wenig_zyklen` → `ungleichmaessig` / `zyklen_passen_nicht`; der Aufrufer schreibt `gruende[0]`), sonst `""` |
+| `takt` | **optional** (seit 0.13.0) | Die **Soll-Phasen des Taktgebers** (trainingsapp P141, 5.11.2026, `docs/plan_taktgeber.md` §3; Vertrag `docs/kompatibilitaet.md` §15): ein Objekt, nur geschrieben, wenn es Soll-Phasen gibt (`AtemSammler.takt_beginn` / `takt_phase` / `takt_ende`). Alte Dateien ohne das Feld lesen sich unverändert (`Atem.takt = None`); ältere Leser übergehen es |
+| `takt.phasen[]` | ja | `[t_s, "ein" \| "aus"]` — Soll-Beginn der Phasen laut Taktgeber, zeitlich sortiert, 3 Nachkommastellen, Wanduhr der Messung wie `phasen[]`; **alle** Takt-Läufe der Messung in einer Liste (so legt die Auswertung Soll und Ist ohne Zusammenführen übereinander) |
+| `takt.laeufe[]` | ja | `[von_s, bis_s, name, rate_pro_min]` je Takt-Lauf — ein neuer Lauf je Start und je Tempoänderung; ohne Lauf ist eine Lücke „kein Takt“ (wie `erfasst`). Deshalb eine Liste statt nur Name und Rate: Name und Rate bleiben je Lauf erhalten, und die Auswertung weiß, wo der Takt lief. Ein beim Schreiben offener Lauf endet mit seiner letzten Soll-Phase (sonst `von_s`) |
+| `takt.name`, `takt.rate_pro_min` | ja | Name und Rate (je Minute, 2 Nachkommastellen, `null` ohne Rate) des **letzten** Laufs — der kurze Weg für Leser, die nur wissen wollen, welcher Takt lief; ohne Lauf `""` und `null` |
 
 - **Journal** `.backup_<ts>_atem.jsonl` neben dem Crash-Backup (`AtemSammler.journal_anhaengen`,
   `aus_journal`): JSON Lines, jede Zeile für sich abgeschlossen, zuletzt `fsync` — `["k", {kopf}]`,
   `["e", von_s]` (Lauf auf), `["x", bis_s]` (Lauf zu), `["p", t_s, "ein"|"aus"]`,
-  `["f", t_ende_s, rate, gueltig, grund]`. Nur Neues wird angehängt; eine halbe Zeile wird
+  `["f", t_ende_s, rate, gueltig, grund]`; Taktgeber (seit 0.13.0): `["t", t_s, name,
+  rate_pro_min]` (Takt auf), `["q", t_s, "ein"|"aus"]` (Soll-Phase), `["u", t_s]` (Takt zu).
+  Nur Neues wird angehängt; eine halbe Zeile wird
   abgeschlossen statt fortgesetzt, ein anderer oder verschwundener Pfad bekommt alles samt Kopf.
-  Ein offener Lauf bleibt im Journal offen. `backup_entfernen` löscht das Journal mit.
+  Ein offener Lauf bleibt im Journal offen (auch ein Takt-Lauf). `backup_entfernen` löscht das
+  Journal mit.
 - **Lesen:** `atem_laden` ist tolerant — fehlende oder kaputte Listen sind leer, unbekannte
-  Phasen und unlesbare Zeilen fallen weg; nur ein fremdes `schema` ist ein Fehler.
+  Phasen und unlesbare Zeilen fallen weg; nur ein fremdes `schema` ist ein Fehler. `Atem.takt`
+  ist ein `Takt` (`name`, `rate_pro_min`, `phasen`, `laeufe`, `ist_getaktet`, `phasen_zwischen`)
+  oder `None`; `Atem.takt_phasen_zwischen(von, bis)` ist ohne Feld leer.
 - `deid.ATEM_REGELN` behält alle Felder (Listen als Ganzes); `deid.format_erkennen` erkennt
   `schema` und die Endung `_atem.json`.
 

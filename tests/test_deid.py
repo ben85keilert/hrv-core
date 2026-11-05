@@ -312,6 +312,13 @@ ATEM = {
     "erfasst": [[10.0, 50.0]],
     "phasen": [[12.346, "ein"], [14.5, "aus"]],
     "fenster": [[40.0, 12.35, True, ""], [45.0, None, False, "bewegung"]],
+    # Soll-Phasen des Taktgebers (P141), optional — bleibt als Ganzes
+    "takt": {
+        "name": "Box 4-4",
+        "rate_pro_min": 7.5,
+        "phasen": [[10.0, "ein"], [14.0, "aus"], [18.0, "ein"]],
+        "laeufe": [[10.0, 22.0, "Box 4-4", 7.5]],
+    },
 }
 
 
@@ -327,6 +334,10 @@ def test_atem_beiwerk_bleibt_vollstaendig_und_wird_erkannt(tmp_path):
     assert deid.format_erkennen(ATEM, "irgendwas.json") == "atem-v1"  # auch am Schema
     assert "_atem.json" in deid.BEIWERK_SUFFIXE and deid.REGELN["atem-v1"] is deid.ATEM_REGELN
     assert set(deid.ATEM_REGELN) == set(ATEM)
+    assert "takt" in deid.ATEM_REGELN and deid.ATEM_REGELN["takt"] is deid.KEEP
+    # Ohne `takt` (Dateien vor 0.13.0) ebenso vollständig
+    ohne = {k: v for k, v in ATEM.items() if k != "takt"}
+    assert deid.deidentifizieren_dict(ohne, beiwerk.name) == (ohne, [])
 
     ziele = deid.deidentifizieren(quelle, tmp_path / "p001", mit_beiwerk=True)
     assert sorted(z.name for z in ziele) == sorted([quelle.name, beiwerk.name])

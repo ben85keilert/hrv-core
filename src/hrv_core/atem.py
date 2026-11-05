@@ -17,6 +17,17 @@ Inhalt stammt aus einem Prototyp (`hrv_core.prototyp`) und ist so gekennzeichnet
 - Kopf: ``schema``, ``art`` (``prototyp``), ``prototyp`` (Modulname), ``hrv_core``
   (Version), ``quelle`` (``sensor`` — ``takt`` ist für den Taktgeber reserviert), ``geraet``
   (Profil-ID wie ``polar_h10``, nie Name, Adresse oder Seriennummer), ``rate_hz``.
+- ``takt`` — **optional** (P141, 5.11.2026): die **Soll-Phasen des Taktgebers**, damit die
+  Auswertung Soll gegen Ist (Sensor) legt und die Atem-HRV die Phasenlage gegen beides rechnet
+  (trainingsapp ``docs/plan_taktgeber.md`` §3). Ein Objekt ``{"name", "rate_pro_min",
+  "phasen", "laeufe"}``: ``phasen[]`` wie oben ``[t_s, "ein" | "aus"]``, zeitlich sortiert —
+  **alle** Takt-Läufe der Messung in einer Liste; ``laeufe[]`` ``[von_s, bis_s, name,
+  rate_pro_min]`` je Lauf (ohne Lauf ist eine Lücke „kein Takt“, wie ``erfasst``; so bleiben
+  Name und Rate je Lauf erhalten, auch nach einer Tempoänderung); ``name`` und
+  ``rate_pro_min`` oben sind die des **letzten** Laufs — der kurze Weg für Leser, die nur
+  wissen wollen, welcher Takt lief. Das Feld steht nur in der Datei, wenn es Soll-Phasen gibt;
+  ältere Leser übergehen es, alte Dateien ohne das Feld lesen sich unverändert
+  (`Atem.takt` ``None``).
 
 Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (``t_wall_s`` wie die Schläge),
 3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetometer, keine Korrekturen
@@ -26,12 +37,14 @@ Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (``t_wall_s`` wie die Sc
 Crash-Sicherheit wie beim EKG (`ekg`): `AtemSammler.journal_anhaengen` hängt nur Neues als
 JSON-Zeilen an eine ``.jsonl`` neben dem Crash-Backup — ``["k", {kopf}]``, ``["e", von_s]``
 (Lauf auf), ``["x", bis_s]`` (Lauf zu), ``["p", t_s, art]``, ``["f", t_ende_s, rate, gueltig,
-grund]`` —, jede Zeile für sich abgeschlossen, zuletzt ``fsync``; endet die Datei mitten in
-einer Zeile, beginnt der Anhang mit einem Zeilenumbruch, und ein anderes oder verschwundenes
-Journal bekommt alles noch einmal. `AtemSammler.aus_journal` baut daraus den Sammler wieder
-auf und übergeht Unlesbares. Ein offener Lauf bleibt im Journal offen; `dokument` und
-`schreiben` schließen ihn mit dem letzten bekannten Zeitpunkt (letzte Phase oder letztes
-Fenster, sonst ``von_s``).
+grund]``, für den Taktgeber ``["t", t_s, name, rate]`` (Takt auf), ``["q", t_s, art]``
+(Soll-Phase), ``["u", t_s]`` (Takt zu) —, jede Zeile für sich abgeschlossen, zuletzt ``fsync``;
+endet die Datei mitten in einer Zeile, beginnt der Anhang mit einem Zeilenumbruch, und ein
+anderes oder verschwundenes Journal bekommt alles noch einmal. `AtemSammler.aus_journal` baut
+daraus den Sammler wieder auf und übergeht Unlesbares. Ein offener Lauf bleibt im Journal
+offen; `dokument` und `schreiben` schließen ihn mit dem letzten bekannten Zeitpunkt (letzte
+Phase oder letztes Fenster, sonst ``von_s``); ein offener Takt-Lauf ebenso mit seiner letzten
+Soll-Phase.
 """
 
 from __future__ import annotations
@@ -93,6 +106,16 @@ def _rate(rate: Any) -> float | None:
     return None if wert != wert else round(wert, 2)  # NaN → None
 
 
+def _laeufe_schliessen(laeufe: list[list[Any]], letzter: Any) -> list[list[Any]]:
+    """Läufe ``[von, bis, …]`` kopieren; ``bis`` ``None`` (offen) wird ``letzter(von)``."""
+    out: list[list[Any]] = []
+    for lauf in laeufe:
+        von, bis, *rest = lauf
+        assert von is not None
+        out.append([von, letzter(von) if bis is None else bis, *rest])
+    return out
+
+
 def _rate_hz(rate_hz: Any) -> float | None:
     if rate_hz is None:
         return None
@@ -122,6 +145,17 @@ class AtemSammler:
     >>> s.lauf_ende(50.0)
     >>> s.dokument()["erfasst"]
     [[10.0, 50.0]]
+    >>> "takt" in doc                   # ohne Soll-Phasen kein Feld
+    False
+    >>> s.takt_beginn(10.0, "Box 4-4", 7.5)
+    >>> s.takt_phase(10.0, "ein")
+    >>> s.takt_phase(14.0, "aus")
+    >>> s.takt_ende(18.0)
+    >>> t = s.dokument()["takt"]
+    >>> t["name"], t["rate_pro_min"], t["phasen"]
+    ('Box 4-4', 7.5, [[10.0, 'ein'], [14.0, 'aus']])
+    >>> t["laeufe"]
+    [[10.0, 18.0, 'Box 4-4', 7.5]]
     """
 
     def __init__(
@@ -142,11 +176,18 @@ class AtemSammler:
         self.laeufe: list[list[float | None]] = []
         self.phasen: list[tuple[float, str]] = []
         self.fenster_liste: list[tuple[float, float | None, bool, str]] = []
+        #: Taktgeber: ``[von_s, bis_s, name, rate_pro_min]`` je Lauf; ``bis_s`` ``None`` = offen
+        self.takt_laeufe: list[list[Any]] = []
+        #: Soll-Phasen des Taktgebers ``(t_s, art)``, alle Läufe in einer Liste
+        self.takt_phasen: list[tuple[float, str]] = []
         self._journal_kopf = False  # steht der Kopf („k“) schon im Journal?
         self._journal_laeufe_ab = 0  # so viele Läufe sind im Journal eröffnet („e“)
         self._journal_zu_ab = 0  # so viele Läufe sind im Journal geschlossen („x“)
         self._journal_phasen_ab = 0
         self._journal_fenster_ab = 0
+        self._journal_takt_laeufe_ab = 0  # Takt-Läufe eröffnet („t“)
+        self._journal_takt_zu_ab = 0  # Takt-Läufe geschlossen („u“)
+        self._journal_takt_phasen_ab = 0  # Soll-Phasen („q“)
         self._journal_pfad: Path | None = None
 
     # -- Sammeln ---------------------------------------------------------------
@@ -185,12 +226,45 @@ class AtemSammler:
         """Ergebnis eines Prüffensters: Ende, Rate je Minute (``None`` = keine), gültig, Grund."""
         self.fenster_liste.append((_zeit(t_ende_s), _rate(rate), bool(gueltig), str(grund or "")))
 
+    # -- Taktgeber (Soll-Phasen) ----------------------------------------------
+
+    @property
+    def takt_offen(self) -> bool:
+        """Ob gerade ein Takt-Lauf offen ist."""
+        return bool(self.takt_laeufe) and self.takt_laeufe[-1][1] is None
+
+    def takt_beginn(self, t_s: float, name: str, rate_pro_min: float | None) -> None:
+        """Der Taktgeber beginnt (auch nach einer Tempoänderung: neuer Lauf mit neuer Rate).
+        Ein noch offener Takt-Lauf endet hier."""
+        t = _zeit(t_s)
+        if self.takt_offen:
+            self.takt_ende(t)
+        self.takt_laeufe.append([t, None, str(name or ""), _rate(rate_pro_min)])
+
+    def takt_phase(self, t_s: float, art: str) -> None:
+        """Soll-Beginn des Ein- (``"ein"``) oder Ausatmens (``"aus"``) laut Taktgeber.
+
+        Raises:
+            ValueError: unbekannte Phase.
+        """
+        if art not in PHASEN:
+            raise ValueError(f"unbekannte Atemphase: {art!r}")
+        self.takt_phasen.append((_zeit(t_s), art))
+
+    def takt_ende(self, t_s: float) -> None:
+        """Der Taktgeber endet; ohne offenen Takt-Lauf passiert nichts."""
+        if not self.takt_offen:
+            return
+        von = self.takt_laeufe[-1][0]
+        self.takt_laeufe[-1][1] = max(von, _zeit(t_s))
+
     # -- Ableitungen -----------------------------------------------------------
 
     @property
     def leer(self) -> bool:
-        """Ob noch nichts gesammelt wurde — dann lohnt kein Beiwerk."""
-        return not (self.laeufe or self.phasen or self.fenster_liste)
+        """Ob noch nichts gesammelt wurde — dann lohnt kein Beiwerk. Soll-Phasen des
+        Taktgebers zählen mit: ein Takt ohne Sensor ergibt ein Beiwerk nur mit ``takt``."""
+        return not (self.laeufe or self.phasen or self.fenster_liste or self.takt_phasen)
 
     def _letzter_zeitpunkt(self, ab: float) -> float:
         """Letzter bekannter Zeitpunkt: letzte Phase oder letztes Fenster, sonst ``ab``."""
@@ -204,14 +278,31 @@ class AtemSammler:
     def erfasst(self) -> list[list[float]]:
         """Die Läufe als ``[von_s, bis_s]``; ein offener Lauf wird mit dem letzten bekannten
         Zeitpunkt geschlossen (nur in der Ausgabe, der Sammler bleibt offen)."""
-        out: list[list[float]] = []
-        for von, bis in self.laeufe:
-            assert von is not None
-            out.append([von, self._letzter_zeitpunkt(von) if bis is None else bis])
-        return out
+        return _laeufe_schliessen(self.laeufe, self._letzter_zeitpunkt)
+
+    def _letzte_takt_phase(self, ab: float) -> float:
+        """Letzte Soll-Phase, sonst ``ab``."""
+        return max([ab, *(t for t, _ in self.takt_phasen)])
+
+    def takt(self) -> dict[str, Any] | None:
+        """Das Feld ``takt`` — ``None`` ohne Soll-Phasen. ``name`` und ``rate_pro_min`` sind
+        die des letzten Laufs; ein offener Lauf endet (nur in der Ausgabe) mit seiner letzten
+        Soll-Phase."""
+        if not self.takt_phasen:
+            return None
+        laeufe = _laeufe_schliessen(self.takt_laeufe, self._letzte_takt_phase)
+        name, rate = (laeufe[-1][2], laeufe[-1][3]) if laeufe else ("", None)
+        return {
+            "name": name,
+            "rate_pro_min": rate,
+            "phasen": [[t, art] for t, art in sorted(self.takt_phasen, key=lambda p: p[0])],
+            "laeufe": laeufe,
+        }
 
     def dokument(self) -> dict[str, Any]:
-        """Das Beiwerk als Dict (``atem-v1``), Phasen zeitlich sortiert."""
+        """Das Beiwerk als Dict (``atem-v1``), Phasen zeitlich sortiert; ``takt`` nur,
+        wenn es Soll-Phasen gibt."""
+        takt = self.takt()
         return {
             "schema": ATEM_SCHEMA,
             "art": ATEM_ART,
@@ -223,6 +314,7 @@ class AtemSammler:
             "erfasst": self.erfasst(),
             "phasen": [[t, art] for t, art in sorted(self.phasen, key=lambda p: p[0])],
             "fenster": [list(f) for f in self.fenster_liste],
+            **({"takt": takt} if takt is not None else {}),
         }
 
     # -- Schreiben -------------------------------------------------------------
@@ -252,7 +344,9 @@ class AtemSammler:
 
         Zeilen: ``["k", {kopf}]`` zuerst, dann ``["e", von_s]`` je eröffnetem Lauf,
         ``["x", bis_s]`` je geschlossenem, ``["p", t_s, art]`` je Phase, ``["f", t_ende_s,
-        rate, gueltig, grund]`` je Fenster. Ein anderer Pfad als beim letzten Mal oder ein
+        rate, gueltig, grund]`` je Fenster; Taktgeber: ``["t", t_s, name, rate]`` je
+        begonnenem Takt-Lauf, ``["u", bis_s]`` je beendetem, ``["q", t_s, art]`` je
+        Soll-Phase. Ein anderer Pfad als beim letzten Mal oder ein
         verschwundenes Journal: alles noch einmal, mit Kopf. Die Zähler rücken erst nach dem
         Schreiben vor — scheitert es, kommt beim nächsten Mal derselbe Stand.
 
@@ -276,15 +370,22 @@ class AtemSammler:
             self._journal_kopf = False
             self._journal_laeufe_ab = self._journal_zu_ab = 0
             self._journal_phasen_ab = self._journal_fenster_ab = 0
+            self._journal_takt_laeufe_ab = self._journal_takt_zu_ab = 0
+            self._journal_takt_phasen_ab = 0
             pfad.unlink(missing_ok=True)  # ein fremder Rest bekäme sonst einen zweiten Kopf
         n_zu = sum(1 for _, bis in self.laeufe if bis is not None)
+        n_takt_zu = sum(1 for lauf in self.takt_laeufe if lauf[1] is not None)
         neu_phasen = range(self._journal_phasen_ab, len(self.phasen))
         neu_fenster = range(self._journal_fenster_ab, len(self.fenster_liste))
+        neu_takt_phasen = range(self._journal_takt_phasen_ab, len(self.takt_phasen))
         nichts_neu = (
             self._journal_laeufe_ab == len(self.laeufe)
             and self._journal_zu_ab == n_zu
             and not neu_phasen
             and not neu_fenster
+            and self._journal_takt_laeufe_ab == len(self.takt_laeufe)
+            and self._journal_takt_zu_ab == n_takt_zu
+            and not neu_takt_phasen
         )
         if self._journal_kopf and nichts_neu:
             return
@@ -311,6 +412,15 @@ class AtemSammler:
                 f.write(json.dumps(["p", *self.phasen[k]], ensure_ascii=False) + "\n")
             for k in neu_fenster:
                 f.write(json.dumps(["f", *self.fenster_liste[k]], ensure_ascii=False) + "\n")
+            # Takt-Läufe genauso: „t“ je neuem (mit Name und Rate), „u“ je geschlossenem
+            for k in range(self._journal_takt_zu_ab, len(self.takt_laeufe)):
+                von, bis, name, rate = self.takt_laeufe[k]
+                if k >= self._journal_takt_laeufe_ab:
+                    f.write(json.dumps(["t", von, name, rate], ensure_ascii=False) + "\n")
+                if bis is not None and k >= self._journal_takt_zu_ab:
+                    f.write(json.dumps(["u", bis]) + "\n")
+            for k in neu_takt_phasen:
+                f.write(json.dumps(["q", *self.takt_phasen[k]], ensure_ascii=False) + "\n")
             f.flush()
             os.fsync(f.fileno())
         self._journal_kopf = True
@@ -318,6 +428,9 @@ class AtemSammler:
         self._journal_zu_ab = n_zu
         self._journal_phasen_ab = len(self.phasen)
         self._journal_fenster_ab = len(self.fenster_liste)
+        self._journal_takt_laeufe_ab = len(self.takt_laeufe)
+        self._journal_takt_zu_ab = n_takt_zu
+        self._journal_takt_phasen_ab = len(self.takt_phasen)
 
     @classmethod
     def aus_journal(cls, journal: Path | str) -> AtemSammler:
@@ -353,6 +466,14 @@ class AtemSammler:
                     elif art == "f" and len(eintrag) >= 4:
                         grund = eintrag[4] if len(eintrag) >= 5 and eintrag[4] is not None else ""
                         s.fenster(float(eintrag[1]), eintrag[2], bool(eintrag[3]), str(grund))
+                    elif art == "t" and len(eintrag) >= 2:
+                        name = eintrag[2] if len(eintrag) >= 3 and eintrag[2] is not None else ""
+                        rate = eintrag[3] if len(eintrag) >= 4 else None
+                        s.takt_beginn(float(eintrag[1]), str(name), rate)
+                    elif art == "u" and len(eintrag) >= 2:
+                        s.takt_ende(float(eintrag[1]))
+                    elif art == "q" and len(eintrag) >= 3 and eintrag[2] in PHASEN:
+                        s.takt_phase(float(eintrag[1]), str(eintrag[2]))
                 except (TypeError, ValueError):
                     continue
         s._journal_kopf = True
@@ -360,6 +481,9 @@ class AtemSammler:
         s._journal_zu_ab = sum(1 for _, bis in s.laeufe if bis is not None)
         s._journal_phasen_ab = len(s.phasen)
         s._journal_fenster_ab = len(s.fenster_liste)
+        s._journal_takt_laeufe_ab = len(s.takt_laeufe)
+        s._journal_takt_zu_ab = sum(1 for lauf in s.takt_laeufe if lauf[1] is not None)
+        s._journal_takt_phasen_ab = len(s.takt_phasen)
         s._journal_pfad = Path(journal)
         return s
 
@@ -370,8 +494,30 @@ class AtemSammler:
 
 
 @dataclass(slots=True)
+class Takt:
+    """Die Soll-Phasen des Taktgebers aus dem Feld ``takt`` (P141)."""
+
+    #: Name und Rate des letzten Takt-Laufs
+    name: str = ""
+    rate_pro_min: float | None = None
+    #: ``(t_s, "ein" | "aus")`` — Soll-Beginn der Phasen, alle Läufe, zeitlich sortiert
+    phasen: list[tuple[float, str]] = field(default_factory=list)
+    #: ``(von_s, bis_s, name, rate_pro_min)`` je Takt-Lauf
+    laeufe: list[tuple[float, float, str, float | None]] = field(default_factory=list)
+
+    def ist_getaktet(self, t_s: float) -> bool:
+        """Ob zur Zeit ``t_s`` ein Takt-Lauf lief."""
+        return any(von <= t_s <= bis for von, bis, _, _ in self.laeufe)
+
+    def phasen_zwischen(self, von_s: float, bis_s: float) -> list[tuple[float, str]]:
+        """Die Soll-Phasen mit ``von_s ≤ t < bis_s``."""
+        return [(t, art) for t, art in self.phasen if von_s <= t < bis_s]
+
+
+@dataclass(slots=True)
 class Atem:
-    """Ein gelesenes Atem-Beiwerk: Läufe, Phasen und Fenster auf der Wanduhr der Messung."""
+    """Ein gelesenes Atem-Beiwerk: Läufe, Phasen und Fenster auf der Wanduhr der Messung;
+    dazu ``takt`` (Soll-Phasen des Taktgebers), ``None`` ohne das Feld."""
 
     quelle: str = QUELLE_SENSOR
     geraet: str = ""
@@ -385,6 +531,8 @@ class Atem:
     phasen: list[tuple[float, str]] = field(default_factory=list)
     #: ``(t_ende_s, rate_pro_min | None, gueltig, grund)`` je Prüffenster
     fenster: list[tuple[float, float | None, bool, str]] = field(default_factory=list)
+    #: Soll-Phasen des Taktgebers — ``None``, wenn die Datei das Feld nicht hat
+    takt: Takt | None = None
 
     @property
     def dauer_erfasst_s(self) -> float:
@@ -398,6 +546,10 @@ class Atem:
     def phasen_zwischen(self, von_s: float, bis_s: float) -> list[tuple[float, str]]:
         """Die Phasen mit ``von_s ≤ t < bis_s``."""
         return [(t, art) for t, art in self.phasen if von_s <= t < bis_s]
+
+    def takt_phasen_zwischen(self, von_s: float, bis_s: float) -> list[tuple[float, str]]:
+        """Die Soll-Phasen des Taktgebers mit ``von_s ≤ t < bis_s``; leer ohne ``takt``."""
+        return [] if self.takt is None else self.takt.phasen_zwischen(von_s, bis_s)
 
     def raten(self, *, nur_gueltig: bool = True) -> list[tuple[float, float]]:
         """``(t_ende_s, rate_pro_min)`` der Fenster — ohne ``nur_gueltig`` auch ungültige
@@ -449,8 +601,37 @@ def _fenster_lesen(roh: Any) -> list[tuple[float, float | None, bool, str]]:
     return out
 
 
+def _takt_laeufe_lesen(roh: Any) -> list[tuple[float, float, str, float | None]]:
+    out: list[tuple[float, float, str, float | None]] = []
+    for lauf in roh if isinstance(roh, list) else []:
+        if not isinstance(lauf, list | tuple) or len(lauf) < 2 or lauf[0] is None:
+            continue
+        try:
+            von = float(lauf[0])
+            bis = von if lauf[1] is None else float(lauf[1])
+        except (TypeError, ValueError):
+            continue
+        name = lauf[2] if len(lauf) >= 3 and lauf[2] is not None else ""
+        rate = _rate(lauf[3]) if len(lauf) >= 4 else None
+        out.append((von, max(von, bis), str(name), rate))
+    return out
+
+
+def _takt_lesen(roh: Any) -> Takt | None:
+    """Das Feld ``takt`` — ``None``, wenn es fehlt oder kein Objekt ist."""
+    if not isinstance(roh, dict):
+        return None
+    return Takt(
+        name=str(roh.get("name") or ""),
+        rate_pro_min=_rate(roh.get("rate_pro_min")),
+        phasen=_phasen_lesen(roh.get("phasen")),
+        laeufe=_takt_laeufe_lesen(roh.get("laeufe")),
+    )
+
+
 def atem_laden(pfad: Path | str) -> Atem:
-    """Ein Atem-Beiwerk lesen — tolerant: fehlende oder kaputte Listen sind leer.
+    """Ein Atem-Beiwerk lesen — tolerant: fehlende oder kaputte Listen sind leer, ohne
+    ``takt`` ist `Atem.takt` ``None``.
 
     Raises:
         ValueError: kein Atem-Beiwerk (kein JSON-Objekt oder ``schema`` nicht ``atem-v1``).
@@ -469,6 +650,7 @@ def atem_laden(pfad: Path | str) -> Atem:
         erfasst=_laeufe_lesen(doc.get("erfasst")),
         phasen=_phasen_lesen(doc.get("phasen")),
         fenster=_fenster_lesen(doc.get("fenster")),
+        takt=_takt_lesen(doc.get("takt")),
     )
 
 
@@ -482,6 +664,7 @@ __all__ = [
     "QUELLE_TAKT",
     "Atem",
     "AtemSammler",
+    "Takt",
     "atem_journal_pfad",
     "atem_laden",
     "atem_pfad",
