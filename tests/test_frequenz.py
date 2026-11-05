@@ -395,3 +395,89 @@ def test_vlf_fenster_stuerzt_nicht_ab_wenn_ein_schlag_vor_den_vorigen_rutscht() 
     t[1] = t[0]
     wert = vlf_fenster(t, rr, 0.0, float(t[-1]))
     assert wert is not None and wert >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Atemband: HF an der gemessenen Atemfrequenz (hrv-research Entscheidung 27)
+# ---------------------------------------------------------------------------
+
+
+def test_atemband_liegt_um_die_atemrate_und_bleibt_in_den_grenzen() -> None:
+    from hrv_core.frequency import atemband, atemband_lf
+
+    assert atemband(6 / 60) == (0.065, 0.15)  # 6/min: ganz unter dem festen HF-Band
+    assert atemband(12 / 60) == (0.13, 0.3)
+    assert atemband(30 / 60) == (0.325, 0.5)  # oben am F_MAX_HZ gedeckelt
+    assert atemband(30 / 60, puls_hz=48 / 60) == (0.325, 0.4)  # … oder an der halben Schlagfrequenz
+    assert atemband(3 / 60) == (0.04, 0.075)  # unten am LF-Anfang
+    assert atemband(0.9, 0.9) is None  # Band leer
+    assert atemband(None) is None and atemband(-1.0) is None
+    assert atemband_lf(atemband(6 / 60)) == (0.04, 0.065)
+    assert atemband_lf(atemband(5 / 60)) is None  # 0,054 − 0,04 < 0,02 Hz
+    assert atemband_lf(atemband(12 / 60)) == (0.04, 0.13)
+
+
+def test_atemband_bei_6_pro_min_nimmt_die_atmung_aus_dem_festen_lf() -> None:
+    """Kohärenzatmung 6/min: Im festen Band ist LF/HF riesig — die Atmung liegt bei 0,1 Hz
+    im LF. Mit der Rate 6/min ausgerichtet steckt fast alle Leistung 0,04–0,5 Hz im
+    Atemband, und ``lf_hf_atem`` ist klein. Die festen Bänder ändern sich dabei nicht."""
+    from hrv_core.frequency import integriere_band
+
+    rr, t = reihe(KOHAERENZ)
+    ohne = frequenzbereich(rr, t, [], nullen_trennen=True)
+    mit = frequenzbereich(rr, t, [], nullen_trennen=True, atemrate_pro_min=6.0)
+    assert ohne is not None and mit is not None
+    for k in ("vlf", "lf", "hf", "lf_hf", "total_power", "gipfel_hz"):
+        assert ohne[k] == mit[k]
+    assert ohne["hf_atem"] is None and ohne["atem_band_hz"] is None and ohne["lf_hf_atem"] is None
+    assert mit["atem_band_hz"] == (0.065, 0.15)
+    assert ohne["lf_hf"] > 20
+    assert mit["lf_hf_atem"] < 0.1
+    gesamt = integriere_band(mit["freqs"], mit["psd"], 0.04, 0.5)
+    assert mit["hf_atem"] > 0.9 * gesamt
+    assert math.isclose(mit["lf_hf_atem"], mit["lf_atem"] / mit["hf_atem"])
+
+
+def test_atemband_in_ruhe_entspricht_dem_festen_hf_band() -> None:
+    """Ruheatmung um 14/min: das Atemband (0,15–0,35 Hz) deckt fast dasselbe wie 0,15–0,40."""
+    rr, t = reihe(RUHE)
+    r = frequenzbereich(rr, t, [], nullen_trennen=True, atemrate_pro_min=14.0)
+    assert r is not None
+    lo, hi = r["atem_band_hz"]
+    assert math.isclose(lo, 0.151666667) and math.isclose(hi, 0.35)
+    assert 0.9 < r["hf_atem"] / r["hf"] <= 1.0
+    assert 0.9 < r["lf_hf_atem"] / r["lf_hf"] < 1.15
+
+
+def test_atemband_folgt_der_bandpolitik() -> None:
+    """Ist das feste HF-Band gesperrt (kein Teilstück ≥ 3 min), gibt es auch kein
+    ``hf_atem``; ist nur LF gesperrt, fehlt ``lf_atem``. Das Band selbst steht trotzdem da."""
+    rr, t = reihe(ECHT)
+    r = frequenzbereich(rr, t, [], nullen_trennen=True, atemrate_pro_min=12.0)  # 76 + 85 s
+    assert r is not None and r["band_status"]["hf"] == BAND_LOCKED
+    assert r["hf_atem"] is None and r["lf_atem"] is None and r["lf_hf_atem"] is None
+    assert r["atem_band_hz"] == (0.13, 0.3)
+    t_kurz = np.cumsum(np.full(250, 800.0)) / 1000  # 200 s: HF offen, LF (≥ 300 s) gesperrt
+    rr_kurz = 800 + 30 * np.sin(2 * np.pi * 0.25 * t_kurz)
+    k = frequenzbereich(rr_kurz, t_kurz, [], atemrate_pro_min=15.0)
+    assert k is not None and k["band_status"] == {
+        "ulf": BAND_LOCKED,
+        "vlf": BAND_LOCKED,
+        "lf": BAND_LOCKED,
+        "hf": BAND_OK,
+    }
+    assert k["hf_atem"] is not None and k["lf_atem"] is None and k["lf_hf_atem"] is None
+
+
+def test_bandleistung_atem_auf_dem_fensterspektrum() -> None:
+    """Für Fenster und Live rechnen die Apps auf ``freqs``/``psd`` des Fensters selbst."""
+    from hrv_core.frequency import bandleistung_atem
+
+    t = np.cumsum(np.full(150, 800.0)) / 1000
+    rr = 800 + 30 * np.sin(2 * np.pi * 0.1 * t)  # 6/min
+    fs = fensterspektrum(t, rr, 0.0, 120.0)
+    assert fs is not None
+    w = bandleistung_atem(fs.freqs, fs.psd, 0.1, 1.25)
+    assert w["atem_band_hz"] == (0.065, 0.15)
+    assert w["hf_atem"] > 5 * fs.werte["hf"]  # die Atmung liegt im festen LF, nicht im HF
+    assert w["lf_hf_atem"] < 0.2 < fs.werte["lf_hf"]

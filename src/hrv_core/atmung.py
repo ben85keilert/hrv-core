@@ -110,6 +110,14 @@ MIN_SCHLAEGE_JE_ATEMZUG = 3.0
 LANGSAM_MIN_ANTEIL = 0.7
 LANGSAM_MIN_RSA_MS = 50.0
 
+#: Atemlagen für die Einordnung von DFA α1 und LF/HF (hrv-research Entscheidung 27):
+#: unter 9/min liegt die Atmung im LF-Band, 9–15/min ist Ruheatmung, darüber schnell.
+#: Grenzen je Minute; die Lage trägt zusätzlich, ob spontan oder getaktet geatmet wurde.
+ATEMLAGE_GRENZEN = (9.0, 15.0)
+ATEMLAGE_UNBEKANNT = "unbekannt"
+#: Werte des Protokollfelds ``atmung.art`` (raw-v1, trainingsapp), die „getaktet“ bedeuten
+GETAKTET_ARTEN = ("getaktet", "uebung")
+
 
 @dataclass(frozen=True)
 class Atmung:
@@ -148,6 +156,46 @@ class Atmung:
             "n": self.n,
             "atem_version": ATEM_VERSION,
         }
+
+
+def atemlage(rate_pro_min: float | None, getaktet: bool = False) -> str:
+    """Atemlage, in der α1 und LF/HF ausgewiesen und nur innerhalb derer sie verglichen
+    werden: ``unter_9``, ``9_bis_15``, ``ueber_15`` (Grenzen `ATEMLAGE_GRENZEN`, Atemzüge je
+    Minute, Grenzen zählen zur Mitte) — bei getakteter Atmung mit Zusatz ``_getaktet`` —
+    oder ``unbekannt`` ohne gültige Rate. Keine Korrekturformel: die Literatur gibt nur
+    den Zusammenhang von α1 mit LF/(LF+HF) (`francis2002alpha`), darum wird die Lage
+    genannt, nicht gerechnet.
+
+    >>> atemlage(6.0), atemlage(9.0), atemlage(15.0), atemlage(15.1)
+    ('unter_9', '9_bis_15', '9_bis_15', 'ueber_15')
+    >>> atemlage(6.0, getaktet=True), atemlage(None), atemlage(float("nan"), True)
+    ('unter_9_getaktet', 'unbekannt', 'unbekannt')
+    """
+    if rate_pro_min is None or not np.isfinite(rate_pro_min) or rate_pro_min <= 0:
+        return ATEMLAGE_UNBEKANNT
+    langsam, schnell = ATEMLAGE_GRENZEN
+    if rate_pro_min < langsam:
+        lage = "unter_9"
+    elif rate_pro_min <= schnell:
+        lage = "9_bis_15"
+    else:
+        lage = "ueber_15"
+    return f"{lage}_getaktet" if getaktet else lage
+
+
+def modus_aus_protokoll(atmung: dict[str, Any] | None) -> str:
+    """Modus für `atemfrequenz` aus dem Protokollfeld ``atmung`` der Messdatei
+    (raw-v1, `docs/formate.md`): nennt es eine Übung oder einen Takt, zählt auch
+    langsames Atmen (`ATEMUEBUNG`); sonst `RUHE`. Fehlt das Feld (Altdateien), `RUHE`.
+
+    >>> modus_aus_protokoll({"art": "getaktet", "takt_pro_min": 6.0})
+    'atemuebung'
+    >>> modus_aus_protokoll({"art": "spontan"}), modus_aus_protokoll(None)
+    ('ruhe', 'ruhe')
+    """
+    if isinstance(atmung, dict) and atmung.get("art") in GETAKTET_ARTEN:
+        return ATEMUEBUNG
+    return RUHE
 
 
 def kurzgrund(gruende: list[str]) -> str:

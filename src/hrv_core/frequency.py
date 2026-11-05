@@ -79,6 +79,8 @@ import numpy as np
 
 from .constants import (
     ALGO_VERSION,
+    ATEMBAND_FAKTOR,
+    ATEMBAND_LF_MIN_HZ,
     BAND_LOCKED,
     BAND_MIN_DAUER_S,
     BAND_OK,
@@ -353,6 +355,119 @@ def gipfel_hz(
     if not maske.any() or float(power[maske].max()) <= 0:
         return None
     return float(freqs[maske][int(np.argmax(power[maske]))])
+
+
+# ---------------------------------------------------------------------------
+# Atemband: HF an der gemessenen Atemfrequenz (hrv-research Entscheidung 27)
+# ---------------------------------------------------------------------------
+#
+# Die festen Bänder (0,15–0,40 Hz) setzen voraus, dass die Atmung im HF-Band liegt —
+# 9 bis 24 Atemzüge je Minute. Wer langsamer atmet (Atemübung, 6/min = 0,1 Hz), legt
+# die Atemschwankung ins LF-Band: LF/HF steigt um eine Größenordnung und sagt nichts
+# über die Regulation. Die Gruppe Bailón rechnet HF darum zeitvariant um die
+# gemessene Atemfrequenz (`hernando2018framework`); den Einfluss der Atmung auf HF,
+# LF/HF und α1 zeigen `saboul2013breathing`, `beda2014lfrespiration` und
+# `francis2002alpha`. Hier dieselbe Idee für eine Messung: ein Band um die Rate f,
+# ``[0,65 f, 1,5 f]`` (die Bandbreite des Zyklenfilters in `atmung`), begrenzt nach
+# unten auf den LF-Anfang und nach oben auf `F_MAX_HZ` bzw. die halbe Schlagfrequenz.
+# ``lf_atem`` ist der Rest vom LF-Anfang bis zur Bandunterkante. Die festen Bänder
+# bleiben daneben unverändert — Task Force und praxis_gui bleiben vergleichbar.
+
+ATEM_FELDER: tuple[str, ...] = ("hf_atem", "lf_atem", "lf_hf_atem", "atem_band_hz")
+
+
+def atemband(f_atem_hz: float | None, puls_hz: float | None = None) -> tuple[float, float] | None:
+    """Ausgerichtetes HF-Band (Hz) um die Atemfrequenz — ``None`` ohne gültige Rate.
+
+    ``[0,65 f, 1,5 f] ∩ [0,04 Hz, min(0,5 Hz, Puls/2)]`` (`ATEMBAND_FAKTOR`,
+    `FREQ_BANDS["lf"][0]`, `F_MAX_HZ`). ``puls_hz`` ist die mittlere Schlagfrequenz
+    (Hz); ohne sie gilt nur `F_MAX_HZ`. Bleibt vom Schnitt nichts, ``None``.
+
+    >>> atemband(0.1)
+    (0.065, 0.15)
+    >>> atemband(0.2, 1.0)
+    (0.13, 0.3)
+    >>> atemband(0.4, 0.8)
+    (0.26, 0.4)
+    >>> atemband(None), atemband(0.0), atemband(float("nan")), atemband(0.9, 0.9)
+    (None, None, None, None)
+    """
+    if f_atem_hz is None or not np.isfinite(f_atem_hz) or f_atem_hz <= 0:
+        return None
+    unten, oben = ATEMBAND_FAKTOR
+    lo = max(unten * float(f_atem_hz), FREQ_BANDS["lf"][0])
+    hi = min(oben * float(f_atem_hz), F_MAX_HZ)
+    if puls_hz is not None and np.isfinite(puls_hz) and puls_hz > 0:
+        hi = min(hi, float(puls_hz) / 2.0)
+    if hi - lo <= KANTE_HZ:
+        return None
+    # auf die Kantentoleranz gerundet: 1,5 · 0,1 ist im Gleitkomma 0,15000000000000002
+    return (round(lo, 9), round(hi, 9))
+
+
+def atemband_lf(band: tuple[float, float] | None) -> tuple[float, float] | None:
+    """Das LF-Band unter dem Atemband: vom LF-Anfang bis zur Bandunterkante.
+
+    ``None``, wenn es schmaler als `ATEMBAND_LF_MIN_HZ` wäre — bei 5/min (0,083 Hz)
+    bleiben 0,014 Hz, das sind bei 5 min Messung vier Stützstellen, kein Band.
+
+    >>> atemband_lf((0.065, 0.15)), atemband_lf((0.13, 0.3))
+    ((0.04, 0.065), (0.04, 0.13))
+    >>> atemband_lf((0.054, 0.125)), atemband_lf(None)
+    (None, None)
+    """
+    if band is None:
+        return None
+    lo = FREQ_BANDS["lf"][0]
+    if band[0] - lo < ATEMBAND_LF_MIN_HZ - KANTE_HZ:
+        return None
+    return (lo, band[0])
+
+
+def bandleistung_atem(
+    freqs: np.ndarray | None,
+    psd: np.ndarray | None,
+    f_atem_hz: float | None,
+    puls_hz: float | None = None,
+    *,
+    psd_lf: np.ndarray | None = None,
+) -> dict[str, Any]:
+    """Leistung im Atemband und darunter — ``hf_atem``, ``lf_atem``, ``lf_hf_atem``
+    (ms², ms², Verhältnis) und ``atem_band_hz`` ``(von, bis)``.
+
+    Alles ``None`` ohne gültige Rate (`atemband`); ``hf_atem`` bzw. ``lf_atem``
+    ``None``, wenn das zugehörige Spektrum fehlt (``psd`` bzw. ``psd_lf``, Vorgabe
+    ``psd``) — in `compute_frequency_domain` sind das die nach der Bandpolitik
+    tauglichen Teilstücke des festen HF- bzw. LF-Bands. ``lf_hf_atem`` nur mit
+    beiden und ``hf_atem > 0``.
+
+    Ein flaches Spektrum (1 ms²/Hz) mit Stützstellen alle 0,01 Hz: die Leistung ist
+    die Breite zwischen erster und letzter Stützstelle im Band (``f_lo ≤ f < f_hi``).
+
+    >>> f = np.arange(0.01, 0.5, 0.01)
+    >>> w = bandleistung_atem(f, np.ones_like(f), 0.1)
+    >>> round(w["hf_atem"], 3), round(w["lf_atem"], 3), round(w["lf_hf_atem"], 3), w["atem_band_hz"]
+    (0.07, 0.02, 0.286, (0.065, 0.15))
+    >>> bandleistung_atem(f, np.ones_like(f), None)["atem_band_hz"] is None
+    True
+    """
+    band = atemband(f_atem_hz, puls_hz)
+    if band is None:
+        return dict.fromkeys(ATEM_FELDER)
+    hf = integriere_band(freqs, psd, *band) if freqs is not None and psd is not None else None
+    lf_band = atemband_lf(band)
+    unten = psd if psd_lf is None else psd_lf
+    lf = (
+        integriere_band(freqs, unten, *lf_band)
+        if lf_band is not None and freqs is not None and unten is not None
+        else None
+    )
+    return {
+        "hf_atem": hf,
+        "lf_atem": lf,
+        "lf_hf_atem": lf / hf if lf is not None and hf is not None and hf > 0 else None,
+        "atem_band_hz": band,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -739,12 +854,20 @@ def compute_frequency_domain(
     max_gap_s: float = 0.0,
     *,
     mindestdauer: bool = True,
+    atemrate_pro_min: float | None = None,
 ) -> dict[str, Any] | None:
     """Frequenzbereichskennzahlen einer segmentierten Aufzeichnung (Teilspektren).
 
+    ``atemrate_pro_min`` ist die gemessene Atemfrequenz der Aufzeichnung (die App
+    entscheidet, welche gilt — Sensor oder `atmung`); damit kommen die Werte im
+    ausgerichteten Atemband dazu (`bandleistung_atem`: ``hf_atem`` über die
+    Teilstücke des festen HF-Bands, ``lf_atem`` über die des LF-Bands). Ohne Rate
+    stehen die vier Felder auf ``None``.
+
     Returns:
         ``ulf``, ``vlf``, ``lf``, ``hf`` (ms²), ``total_power``, ``lf_hf``,
-        ``lf_n``, ``hf_n`` (%), Gipfellagen ``gipfel_hz``, ``lf_gipfel_hz``,
+        ``lf_n``, ``hf_n`` (%), ``hf_atem``, ``lf_atem``, ``lf_hf_atem``,
+        ``atem_band_hz``, Gipfellagen ``gipfel_hz``, ``lf_gipfel_hz``,
         ``hf_gipfel_hz``, dazu ``band_status``, ``band_reason``, ``band_reif``,
         ``psd_method``, ``n``, ``n_segments``, ``segment_dauer_s``, ``dauer_s``,
         ``df_hz``, ``coverage_pct``, ``algo_version`` — und für die Kurve
@@ -762,16 +885,31 @@ def compute_frequency_domain(
     politik = pruefe_bandpolitik(sp.dauer_s, mindestdauer=mindestdauer)
     status, auswahl = politik["band_status"], politik["band_segmente"]
     werte: dict[str, float | None] = {}
+    bandmittel: dict[str, np.ndarray] = {}
     for band in BAENDER:
         if status.get(band) != BAND_OK:
             werte[band] = None
             continue
-        werte[band] = integriere_band(sp.freqs, sp.mittel(auswahl.get(band)), *FREQ_BANDS[band])
+        bandmittel[band] = sp.mittel(auswahl.get(band))
+        werte[band] = integriere_band(sp.freqs, bandmittel[band], *FREQ_BANDS[band])
     psd = sp.mittel()
     gesamt = float(sum(sp.dauer_s))
+    rr_summe_ms = float(sum(float(np.sum(s.rr_ms)) for s in segmente))
+    puls_hz = 1000.0 * n / rr_summe_ms if rr_summe_ms > 0 else None
+    # Atemband auf den Teilstücken des festen HF- bzw. LF-Bands; ein gesperrtes Band
+    # hat kein Spektrum (NaN → `integriere_band` liefert None)
+    leer = np.full_like(sp.freqs, np.nan)
+    atem = bandleistung_atem(
+        sp.freqs,
+        bandmittel.get("hf", leer),
+        None if atemrate_pro_min is None else atemrate_pro_min / 60.0,
+        puls_hz,
+        psd_lf=bandmittel.get("lf", leer),
+    )
     return {
         **werte,
         **_ableiten(werte),
+        **atem,
         "gipfel_hz": gipfel_hz(sp.freqs, psd),
         "lf_gipfel_hz": gipfel_hz(sp.freqs, psd, FREQ_BANDS["lf"]),
         "hf_gipfel_hz": gipfel_hz(sp.freqs, psd, FREQ_BANDS["hf"]),
@@ -835,13 +973,15 @@ def frequenzbereich(
     *,
     mindestdauer: bool = True,
     nullen_trennen: bool = False,
+    atemrate_pro_min: float | None = None,
 ) -> dict[str, Any] | None:
     """Bequemer Einstieg: RR-Reihe (samt Nähten) → `compute_frequency_domain`.
 
     ``t_s`` ist die Zeit je Schlag (Ende des Intervalls). Innerhalb eines
     Teilstücks fehlen keine Schläge, die Herzuhr (``Korrigiert.t_s``) genügt.
     Nullen trennen nicht (`ohne_nullen`); ``nullen_trennen=True`` rechnet wie
-    praxis_gui ohne ``interpolate_zeros`` — für den Abgleich.
+    praxis_gui ohne ``interpolate_zeros`` — für den Abgleich. ``atemrate_pro_min``
+    (gemessene Atemfrequenz) schaltet das ausgerichtete Atemband zu.
     """
     if not nullen_trennen:
         rr_ms, t_s, breaks = ohne_nullen(rr_ms, t_s, breaks)
@@ -849,7 +989,10 @@ def frequenzbereich(
     if int(gueltig_maske(roh).sum()) < MIN_BEATS_FREQUENCY:
         return None
     return compute_frequency_domain(
-        teilstuecke(roh, t_s, breaks), methode, mindestdauer=mindestdauer
+        teilstuecke(roh, t_s, breaks),
+        methode,
+        mindestdauer=mindestdauer,
+        atemrate_pro_min=atemrate_pro_min,
     )
 
 

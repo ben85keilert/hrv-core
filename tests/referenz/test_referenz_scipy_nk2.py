@@ -156,3 +156,32 @@ def test_lomb_hann_wie_scipy_mit_gefensterten_werten(name: str) -> None:
     soll = scipy_signal.lombscargle(t, y, 2 * np.pi * f, normalize=False)
     soll = soll * 2.0 * spanne / y.size / float(np.mean(w * w))
     np.testing.assert_allclose(ist, soll, rtol=1e-9, atol=1e-9 * soll.max())
+
+
+@pytest.mark.parametrize("name", DATEIEN)
+@pytest.mark.parametrize("rate_pro_min", [6.0, 12.0, 20.0])
+def test_bandleistung_atem_wie_scipy(name: str, rate_pro_min: float) -> None:
+    """Atemband (Entscheidung 27): scipy-Lomb, Trapez über ``[0,65 f, 1,5 f] ∩ [0,04, min(0,5,
+    Puls/2)]`` und über ``[0,04, Unterkante]`` — dieselben Zahlen wie `bandleistung_atem`."""
+    from hrv_core.frequency import bandleistung_atem
+
+    t, rr = _reihe(name)
+    spanne = float(t[-1] - t[0])
+    f = np.arange(1.0 / spanne, 0.5, 1.0 / spanne)
+    y = rr - rr.mean()
+    p = scipy_signal.lombscargle(t, y, 2 * np.pi * f, normalize=False) * 2.0 * spanne / y.size
+    puls_hz = 1000.0 / float(rr.mean())
+    f_atem = rate_pro_min / 60.0
+    lo, hi = max(0.65 * f_atem, 0.04), min(1.5 * f_atem, 0.5, puls_hz / 2)
+    ist = bandleistung_atem(f, p, f_atem, puls_hz)
+    assert ist["atem_band_hz"] == pytest.approx((lo, hi), abs=1e-9)
+    im = (f >= lo - 1e-9) & (f < hi - 1e-9)
+    soll_hf = float(np.trapezoid(p[im], f[im]))
+    assert ist["hf_atem"] == pytest.approx(soll_hf, rel=1e-9)
+    unten = (f >= 0.04 - 1e-9) & (f < lo - 1e-9)
+    if lo - 0.04 >= 0.02:
+        soll_lf = float(np.trapezoid(p[unten], f[unten]))
+        assert ist["lf_atem"] == pytest.approx(soll_lf, rel=1e-9)
+        assert ist["lf_hf_atem"] == pytest.approx(soll_lf / soll_hf, rel=1e-9)
+    else:
+        assert ist["lf_atem"] is None and ist["lf_hf_atem"] is None

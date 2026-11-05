@@ -94,6 +94,21 @@ vorhandenes Sidecar wird **fortgeschrieben**, fremde Felder (praxis_gui) bleiben
 | `segments[]` | ja | `id`, `name`, `t_start_s`, `t_end_s` (bei Crop relativ zu dessen Anfang), `color`, `metrics`, `computed_utc`, `active`, `visible`; `gesamt` legt praxis_gui an; je Segment wird das gelesene Objekt fortgeschrieben (F11); Erweiterung `rand` (`kopf_s`, `endteil_s`, nur wenn gesetzt — praxis_gui behält es nicht, die Wahrheit ist die Marke der Start-Notiz) |
 | `metric_selection`, `rolling_*`, `frequency_summary`, `nonlinear_summary`, `neurokit2_hrv_*`, `ecg_qualitaet`, `ecg_morphologie` | nein (praxis_gui) | bleiben erhalten |
 
+### Kennzahlen-Schlüssel, die hrv-core liefert (für `metrics` und die Caches der Apps)
+
+`frequency.frequenzbereich` / `compute_frequency_domain` (`docs/hrv_algorithmen.md`,
+„Frequenzbereich“): `ulf`, `vlf`, `lf`, `hf`, `total_power`, `lf_hf`, `lf_n`, `hf_n`,
+`gipfel_hz`, `lf_gipfel_hz`, `hf_gipfel_hz`, `band_status`, `band_reason`, `band_reif`,
+`algo_version` … — und seit 5.11.2026 (hrv-research Entscheidung 27) **neben** den festen
+Bändern `hf_atem`, `lf_atem`, `lf_hf_atem` (ms², ms², Verhältnis) und `atem_band_hz`
+(`[von, bis]`), alle `null` ohne gültige Atemrate (`atemrate_pro_min`, von der App
+gewählt). Die Atemlage zu α1 (`atmung.atemlage`: `unter_9`, `9_bis_15`, `ueber_15`, je
+mit `_getaktet`, sonst `unbekannt`) ist kein Feld der Rechnung, sondern eine Einordnung,
+die die App neben `dfa_alpha1` legt; `referenz.referenz` schreibt sie als
+`atemrate.atemlage` in den Golden Master. Weil keine bestehende Zahl sich ändert, blieb
+`ALGO_VERSION` bei 8 — ein Cache ohne die neuen Schlüssel ist nicht veraltet, sondern
+unvollständig; die Apps ergänzen ihn, wenn sie die Felder zeigen wollen.
+
 ## `mitschnitt-v1` — Rohmitschnitt `sensor_<ts>_mitschnitt.jsonl`
 
 `mitschnitt` (`Schreiber`, `lesen`, `laden`, `stroeme`, `zusammenfassen`), seit 0.6.0 (Plan

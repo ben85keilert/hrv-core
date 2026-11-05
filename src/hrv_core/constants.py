@@ -51,6 +51,11 @@ from typing import Final
 #   bei SD1/SD2 ohne SD2 und bei einem Band ohne Teilspektrum; Bandkanten mit
 #   1e-9-Hz-Toleranz (bei T = 1800 s zählte der 0,04-Bin zum VLF, der 0,4-Bin zum
 #   HF); `fensterspektrum` ab `LANG_AB_S` über den langen Weg. Golden erneuert.
+# — (2026-11-05, hrv-research Entscheidung 27): HF-Band an der Atemrate
+#   (`frequency.bandleistung_atem`: `hf_atem`, `lf_atem`, `lf_hf_atem`, `atem_band_hz`)
+#   **neben** den festen Bändern und `atmung.atemlage` für α1 — neue Felder, keine
+#   bestehende Zahl ändert sich, darum kein Sprung (Regel: hochzählen, wenn sich eine
+#   Zahl auf bisherigen Messungen ändert). Golden nur um die neuen Felder ergänzt.
 ALGO_VERSION: Final[int] = 8
 
 # ---------------------------------------------------------------------------
@@ -87,6 +92,14 @@ FREQ_BANDS: Final[dict[str, tuple[float, float]]] = {
     "hf": (0.15, 0.40),
     "tp": (0.003, 0.40),
 }
+
+# Ausgerichtetes HF-Band um die gemessene Atemfrequenz f (hrv-research Entscheidung 27,
+# `frequency.atemband`): ``[0,65 f, 1,5 f]`` — die Bandbreite des Zyklenfilters in
+# `atmung` —, geschnitten mit ``[LF-Anfang, min(F_MAX_HZ, Puls/2)]``. `lf_atem` reicht
+# vom LF-Anfang bis zur Bandunterkante und wird nur ausgewiesen, wenn das mindestens
+# ATEMBAND_LF_MIN_HZ breit ist. Die festen Bänder bleiben daneben unverändert.
+ATEMBAND_FAKTOR: Final[tuple[float, float]] = (0.65, 1.5)
+ATEMBAND_LF_MIN_HZ: Final[float] = 0.02
 
 # Wie lange muss gemessen worden sein, damit ein Band überhaupt aussagekräftig ist.
 # Ein Band unterhalb seiner Mindestdauer liefert `None`, nie eine erfundene Zahl.

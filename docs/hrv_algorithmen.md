@@ -508,6 +508,46 @@ ulf 0.0001–0.003 · vlf 0.003–0.04 · lf 0.04–0.15 · hf 0.15–0.40 · tp
 
 Mindestmessdauer: lf ≥ 300 s, hf ≥ 180 s, vlf ≥ 1200 s, ulf ≥ 14400 s.
 
+### HF-Band an der gemessenen Atemrate (seit 5.11.2026, hrv-research Entscheidung 27)
+
+Die festen Bänder setzen voraus, dass die Atmung im HF-Band liegt (0,15–0,40 Hz,
+9–24 Atemzüge je Minute). Wer langsamer atmet — Atemübung, Kohärenzatmung mit
+6/min = 0,1 Hz —, legt die Atemschwankung ins LF-Band: LF/HF steigt um eine
+Größenordnung, HF fällt, und beides sagt nichts über die Regulation, sondern
+nur, wie geatmet wurde (`saboul2013breathing`, `beda2014lfrespiration`; für
+α1 `francis2002alpha`). Die Gruppe Bailón rechnet HF darum zeitvariant um die
+gemessene Atemfrequenz (`hernando2018framework`). Hier dieselbe Idee je Messung,
+**neben** den festen Bändern, nie statt — Task Force und praxis_gui bleiben
+vergleichbar, und keine bisherige Zahl ändert sich (kein `ALGO_VERSION`-Sprung):
+
+```
+f           gemessene Atemfrequenz (Hz) — Parameter von außen, die App entscheidet,
+            welche gilt (Sensor oder `atmung`; Vorgabe in `referenz`: `atmung` im Modus
+            aus dem Protokollfeld `atmung` der Messdatei, `atmung.modus_aus_protokoll`)
+atem_band   [0,65 f, 1,5 f] ∩ [0,04 Hz, min(0,5 Hz, Puls/2)]       (`frequency.atemband`)
+hf_atem     ∫ PSD über atem_band                                   (ms²)
+lf_atem     ∫ PSD über [0,04 Hz, Unterkante von atem_band]        (ms²; nur wenn ≥ 0,02 Hz breit)
+lf_hf_atem  lf_atem / hf_atem
+```
+
+Die Faktoren 0,65 und 1,5 sind die Bandbreite des Zyklenfilters in `atmung`
+(`constants.ATEMBAND_FAKTOR`); `Puls/2` ist die halbe mittlere Schlagfrequenz,
+über der das Tachogramm nichts mehr auflöst. `hf_atem` rechnet auf den
+Teilstücken, die die Bandpolitik dem festen HF-Band zuteilt, `lf_atem` auf
+denen des LF-Bands — ein gesperrtes Band sperrt auch den Atemwert. Ohne gültige
+Rate stehen alle vier Felder auf `None` (`atem_band_hz` nennt das Band).
+Einstieg: `frequenzbereich(..., atemrate_pro_min=…)`; für Fenster und Live
+`bandleistung_atem(freqs, psd, f, puls_hz)` auf dem Fensterspektrum.
+Referenztest gegen scipy (`tests/referenz/`), Golden Master um die Felder ergänzt.
+
+Für α1 gibt es keine Korrekturformel — die Literatur kennt nur den
+Zusammenhang mit LF/(LF + HF) (`francis2002alpha`). α1 wird darum mit der
+**Atemlage** ausgewiesen und nur innerhalb einer Lage verglichen
+(`atmung.atemlage`: `unter_9`, `9_bis_15`, `ueber_15`, je mit `_getaktet`,
+sonst `unbekannt`); die Schwellen aus α1 (`herzfrequenz.schwelle_alpha1`)
+gelten nur bei spontaner Atmung ab 9/min. Was die Apps unter 9/min zeigen
+(Zahl mit Hinweis statt verbergen), entscheiden sie selbst.
+
 ### Die drei Fallstricke
 
 **1. Lomb-Normierung.**
@@ -710,6 +750,12 @@ Gruppe `referenz`); Golden Master in `tests/golden/trainingsapp/`.
 
 praxis_gui korrigiert vorher mit dem Kubios-Verfahren aus neurokit2. Das gibt es
 mobil nicht — wir nutzen die Malik-Korrektur und kennzeichnen das Ergebnis.
+
+α1 hängt an der Atmung wie LF/(LF + HF) (`francis2002alpha`): langsames Atmen
+(6/min) hebt es auf 1,3 und darüber, ohne dass sich an der Regulation etwas
+ändert. Darum wird α1 mit der Atemlage ausgewiesen (`atmung.atemlage`, Abschnitt
+„HF-Band an der gemessenen Atemrate“) — keine Korrekturformel, kein Vergleich
+über Lagen hinweg.
 
 ### Sample Entropy (`nonlinear.compute_sampen`)
 

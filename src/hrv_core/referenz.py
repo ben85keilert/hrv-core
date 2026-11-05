@@ -21,7 +21,16 @@ from typing import Any
 import numpy as np
 
 from . import ausschnitte, korrektur, nonlinear, ppi, trends
-from .atmung import ATEM_VERSION, ATEMUEBUNG, RUHE, atemfrequenz
+from .atmung import (
+    ATEM_VERSION,
+    ATEMUEBUNG,
+    GETAKTET_ARTEN,
+    RUHE,
+    atemfrequenz,
+    atemlage,
+    median,
+    modus_aus_protokoll,
+)
 from .constants import ALGO_VERSION
 from .frequency import fensterspektrum, frequenzbereich
 from .recording import Recording, laden
@@ -89,7 +98,7 @@ def _korrigiert_dict(korr: korrektur.Korrigiert) -> dict[str, Any]:
     }
 
 
-def _frequenz(korr: korrektur.Korrigiert) -> dict[str, Any]:
+def _frequenz(korr: korrektur.Korrigiert, atemrate_pro_min: float | None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, kw in (
         ("lomb", {}),
@@ -97,12 +106,50 @@ def _frequenz(korr: korrektur.Korrigiert) -> dict[str, Any]:
         ("lomb_nullen_trennen", {"nullen_trennen": True}),
         ("lomb_ohne_mindestdauer", {"mindestdauer": False}),
     ):
-        out[name] = frequenzbereich(korr.rr_ms, korr.t_s, korr.breaks, **kw)  # type: ignore[arg-type]
+        out[name] = frequenzbereich(
+            korr.rr_ms,  # type: ignore[arg-type]
+            korr.t_s,
+            korr.breaks,
+            atemrate_pro_min=atemrate_pro_min,
+            **kw,  # type: ignore[arg-type]
+        )
     return out
 
 
-def variante(rec: Recording, regeln: Korrekturregeln, achse: list[float]) -> dict[str, Any]:
-    """Eine Korrekturvariante: Automatik mit ``regeln``, dann alles auf der korrigierten Reihe."""
+def atemrate(rec: Recording, achse: list[float]) -> dict[str, Any]:
+    """Die Atemrate der Messung für das ausgerichtete Atemband und die Atemlage.
+
+    Vorgabe der Bibliothek (die Apps dürfen eine andere Quelle wählen, etwa den
+    Beschleunigungssensor): `atmung.median` über gleitende Minutenfenster der rohen
+    Reihe — wie die Atemfrequenz einer Messung in beiden Apps — im Modus aus dem
+    Protokollfeld ``atmung`` (`modus_aus_protokoll`), ``getaktet`` ebenfalls daraus.
+    Ohne gültiges Fenster ``rate_pro_min = None`` und Lage ``unbekannt``.
+    """
+    protokoll = rec.extra.get("atmung")
+    modus = modus_aus_protokoll(protokoll)
+    m = median(achse, [float(x) for x in rec.rr_ms], modus=modus)
+    getaktet = isinstance(protokoll, dict) and protokoll.get("art") in GETAKTET_ARTEN
+    return {
+        "modus": modus,
+        "getaktet": getaktet,
+        "rate_pro_min": m.rate_pro_min,
+        "n_fenster": m.n_fenster,
+        "n_gueltig": m.n_gueltig,
+        "atemlage": atemlage(m.rate_pro_min, getaktet),
+    }
+
+
+def variante(
+    rec: Recording,
+    regeln: Korrekturregeln,
+    achse: list[float],
+    atemrate_pro_min: float | None = None,
+) -> dict[str, Any]:
+    """Eine Korrekturvariante: Automatik mit ``regeln``, dann alles auf der korrigierten Reihe.
+
+    ``atemrate_pro_min`` (Vorgabe `atemrate`) schaltet im Frequenzbereich das an der
+    Atmung ausgerichtete Band zu.
+    """
     basis = korrektur.analysebasis(rec, regeln)
     ketten = korrektur.vorschlaege(basis.rec, regeln)
     korrekturen = [k for kette in ketten for k in kette.vorschlag]
@@ -128,7 +175,7 @@ def variante(rec: Recording, regeln: Korrekturregeln, achse: list[float]) -> dic
         "korrigiert": _korrigiert_dict(korr),
         "kennzahlen": korrektur.kennzahlen(korr),
         "kennzahlen_pnn20": compute_time_domain(rr, pnn_threshold_ms=20.0, breaks=korr.breaks),
-        "frequenz": _frequenz(korr),
+        "frequenz": _frequenz(korr, atemrate_pro_min),
         "poincare": nonlinear.compute_poincare(rr, korr.breaks),
         "dfa_alpha1": nonlinear.compute_dfa_alpha1(rr),
         "sampen": nonlinear.compute_sampen(rr),
@@ -189,6 +236,7 @@ def referenz(pfad: Path | str) -> dict[str, Any]:
             modus: atemfrequenz(achse, [float(x) for x in rr_roh], modus=modus).als_dict()
             for modus in (RUHE, ATEMUEBUNG)
         },
+        "atemrate": atemrate(rec, achse),
         "varianten": {},
     }
     varianten = {
@@ -200,5 +248,5 @@ def referenz(pfad: Path | str) -> dict[str, Any]:
     if rec.ppi_pakete is not None:
         varianten["selbst"] = Korrekturregeln(sensor_verwerfung="selbst")
     for name, regeln in varianten.items():
-        out["varianten"][name] = variante(rec, regeln, achse)
+        out["varianten"][name] = variante(rec, regeln, achse, out["atemrate"]["rate_pro_min"])
     return json_tauglich(out)

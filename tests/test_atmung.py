@@ -190,3 +190,24 @@ def test_golden_kohaerenzatmung_nur_als_atemuebung() -> None:
     assert all(r is None for r in fenster_raten(t, rr, RUHE))
     raten = fenster_raten(t, rr, ATEMUEBUNG)
     assert all(r is not None and abs(r - 6.0) < 0.4 for r in raten)
+
+
+def test_atemlage_und_modus_aus_protokoll() -> None:
+    """Atemlage für α1/LF-HF (Entscheidung 27): drei Lagen, getaktet eigens, sonst unbekannt."""
+    from hrv_core.atmung import atemlage, modus_aus_protokoll
+
+    assert [atemlage(r) for r in (5.0, 8.99, 9.0, 12.0, 15.0, 15.01, 30.0)] == [
+        "unter_9",
+        "unter_9",
+        "9_bis_15",
+        "9_bis_15",
+        "9_bis_15",
+        "ueber_15",
+        "ueber_15",
+    ]
+    assert atemlage(6.0, getaktet=True) == "unter_9_getaktet"
+    assert atemlage(None) == atemlage(0.0) == atemlage(float("nan"), True) == "unbekannt"
+    assert modus_aus_protokoll({"art": "uebung", "uebung": "box"}) == ATEMUEBUNG
+    assert modus_aus_protokoll({"art": "getaktet", "takt_pro_min": 6.0}) == ATEMUEBUNG
+    assert modus_aus_protokoll({"art": "spontan"}) == RUHE
+    assert modus_aus_protokoll(None) == RUHE and modus_aus_protokoll("uebung") == RUHE
