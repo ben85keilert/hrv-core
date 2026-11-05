@@ -191,3 +191,18 @@ def test_rechenlast_unter_20_ms_je_sekunde() -> None:
     _lauf(xyz, 200.0)
     dauer = time.perf_counter() - start
     assert dauer / 120.0 < 0.020, dauer
+
+
+def test_welle_dann_stillstand_ohne_rechenfehler() -> None:
+    """Nach 60 s Atemwelle ein konstantes Signal: die nachlaufenden Quadratsummen rutschen
+    durch Gleitkomma knapp unter 0 — kein ``math domain error`` (Befund der trainingsapp)."""
+    rate = 50.0
+    live = al.AtemLive(rate)
+    t = np.arange(0, 60, 1 / rate)
+    welle = 25.0 * np.sin(2 * np.pi * t / 10.0)
+    xyz = np.column_stack([np.zeros_like(t), np.zeros_like(t), -1000.0 - welle])
+    live.rahmen(xyz, 0.0)
+    still = np.column_stack([np.zeros(3000), np.zeros(3000), np.full(3000, -1000.0)])
+    live.rahmen(still, 60.0)
+    live.abschluss()
+    assert live.stand().atemzuege >= 5

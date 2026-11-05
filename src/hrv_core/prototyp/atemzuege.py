@@ -404,7 +404,8 @@ class AtemLive:
         # Bewegung
         mx, my, mz = self._m05[0].schieben(x), self._m05[1].schieben(y), self._m05[2].schieben(z)
         dev2 = (x - mx) ** 2 + (y - my) ** 2 + (z - mz) ** 2
-        unruhe = math.sqrt(self._dev2.schieben(dev2))
+        # max(0, …): die nachlaufende Summe rutscht durch Gleitkomma knapp unter 0
+        unruhe = math.sqrt(max(0.0, self._dev2.schieben(dev2)))
         s = (self._m1[0].schieben(x), self._m1[1].schieben(y), self._m1[2].schieben(z))
         sprung = 0.0
         if len(self._m1_alt) == self._m1_alt.maxlen:
@@ -438,7 +439,7 @@ class AtemLive:
             yh = p - self._hp.schieben(p)
             yw = self._lp.schieben(yh)
             tw = t - self._lp_versatz
-            huelle = math.sqrt(self._huelle.schieben(yw * yw)) * math.sqrt(2.0)
+            huelle = math.sqrt(max(0.0, self._huelle.schieben(yw * yw))) * math.sqrt(2.0)
             self._huelle_jetzt = max(huelle, HUELLE_MIN_MG)
             heraus += self._wendepunkte(tw, yw, HYSTERESE * self._huelle_jetzt)
         self._t_ring.append(t)
