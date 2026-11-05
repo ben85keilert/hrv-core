@@ -10,8 +10,10 @@ Inhalt stammt aus einem Prototyp (`hrv_core.prototyp`) und ist so gekennzeichnet
 - ``phasen[]`` — ``[t_s, "ein" | "aus"]``, Beginn von Ein- bzw. Ausatmen, zeitlich sortiert.
 - ``fenster[]`` — ``[t_ende_s, rate_pro_min, gueltig, grund]`` je Prüffenster (alle 5 s,
   30 s lang, Ende des Fensters); ``rate_pro_min`` ist ``null`` und ``grund`` ein
-  snake_case-Code aus dem Prototyp (``bewegung``, ``amplitude_klein``, ``unregelmaessig``,
-  ``zu_wenig_zyklen``, ``kein_gipfel`` …), wenn das Fenster nicht gültig ist.
+  snake_case-Code aus dem Prototyp, wenn das Fenster nicht gültig ist — der **erste** Grund
+  seiner Prüfreihenfolge (`hrv_core.prototyp.atemzuege`): ``bewegung``, ``amplitude_klein``,
+  ``kein_gipfel`` / ``gipfel_undeutlich``, ``zu_wenig_zyklen``, ``ungleichmaessig`` /
+  ``zyklen_passen_nicht``.
 - Kopf: ``schema``, ``art`` (``prototyp``), ``prototyp`` (Modulname), ``hrv_core``
   (Version), ``quelle`` (``sensor`` — ``takt`` ist für den Taktgeber reserviert), ``geraet``
   (Profil-ID wie ``polar_h10``, nie Name, Adresse oder Seriennummer), ``rate_hz``.

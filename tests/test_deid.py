@@ -146,6 +146,7 @@ VOLL = {
     "messungen": [{"t_s": 0.8, "t_wall_s": 0.81, "tw_src": "m", "hf_bpm": 75, "rr_ms": 800}],
     "fremdes_feld": {"name": "X"},
     "_wiederherstellung": {"subject_id": "p-abc", "grenzen": [[{"t": 1.0}, "Ruhe", False]]},
+    "_journal": ".backup_1900-01-01_000000.jsonl",
 }
 
 
@@ -160,6 +161,7 @@ def test_weissliste_entfernt_alles_was_sie_nicht_kennt(tmp_path):
     assert kopie["patient_id"] is None and kopie["behandlung_id"] is None
     assert kopie["geraet"] == "Polar H10"  # Seriennummer weg
     assert "fremdes_feld" not in kopie and "_wiederherstellung" not in kopie
+    assert "_journal" not in kopie  # Backup-Kopf seit 28.10.2026 (aufnahme.JOURNAL)
     assert kopie["ereignisse"][0]["marke"] == {
         "quelle": "timer",
         "art": "start",
@@ -182,6 +184,7 @@ def test_weissliste_entfernt_alles_was_sie_nicht_kennt(tmp_path):
         "unbekannt: ereignisse[0].marke.lat",
         "unbekannt: fremdes_feld",
         "entfernt: _wiederherstellung",
+        "entfernt: _journal",
     }
     assert deid.pruefen(tmp_path / "p001").ok
 
@@ -228,8 +231,26 @@ def test_pruefen_findet_verschachtelte_personenfelder_und_unbekanntes(tmp_path):
         "Seriennummer oder Adresse im Gerätenamen: teilnehmer[0].geraet",
     ]
     assert gruende["irgendwas.json"] == ["unbekanntes Dateiformat"]
-    hinweise = {p.name: h for p, h in bericht.hinweise}
-    assert "marke.name" in hinweise[".backup_a.json"]
+    hinweise: dict[str, list[str]] = {}
+    for p, h in bericht.hinweise:
+        hinweise.setdefault(p.name, []).append(h)
+    assert any("marke.name" in h for h in hinweise[".backup_a.json"])
+    # `_journal` ist kein unbekanntes Feld (Befund 7, fünfte Prüfrunde): ein Backup-Kopf
+    # mit leerem `_wiederherstellung` und `_journal` besteht die Prüfung mit einem Hinweis
+    sauber = {k: v for k, v in VOLL.items() if k != "fremdes_feld"}
+    sauber.update(
+        patient_id=None,
+        behandlung_id=None,
+        geraet="Polar H10",
+        ereignisse=[],
+        _wiederherstellung={"grenzen": []},
+    )
+    _schreibe(tmp_path / "p001" / ".backup_b.json", sauber)
+    einzeln = deid.pruefen(tmp_path)
+    assert not [g for p, g in einzeln.ablehnungen if p.name == ".backup_b.json"]
+    assert ("Backup-Felder vorhanden: _wiederherstellung, _journal") in [
+        h for p, h in einzeln.hinweise if p.name == ".backup_b.json"
+    ]
 
     # de-identifiziert ist die Sitzung sauber: Adresse null, Gerät gekürzt
     (ziel,) = deid.deidentifizieren(tmp_path / "p001" / "sitzung_1.json", tmp_path / "p002")

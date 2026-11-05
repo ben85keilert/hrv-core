@@ -9,7 +9,8 @@ Zwei Aufgaben, beide ohne Personenbezug im Code:
     (``patient_id``, ``behandlung_id``, ``subject_id``, BLE-``adresse``), der
     Gerätename auf das Modell gekürzt (``"Polar H10 ABC123"`` → ``"Polar H10"``,
     die Seriennummer wäre ein Pseudo-Identifikator über Dateien hinweg), Freitext
-    bleibt und wird gemeldet, der Backup-Block ``_wiederherstellung`` fällt weg —
+    bleibt und wird gemeldet, die Backup-Felder ``_wiederherstellung`` und ``_journal``
+    (nur in ``.backup_*``-Köpfen, `aufnahme`) fallen weg —
     und **jedes Feld, das die Weißliste nicht kennt, fällt weg** (rekursiv, auch
     in ``ereignisse[]``, ``marke``, ``segments[]``, ``teilnehmer[]``). Bis
     19.10.2026 leerte eine Schwarzliste nur zwei Top-Level-Felder (Befund F12).
@@ -150,6 +151,7 @@ RAW_REGELN: dict[str, Any] = {
     "hrv": KEEP,
     "quality": KEEP,
     "_wiederherstellung": ENTFERNEN,  # Backup: Profil-ID und Timer-Grenzen der App
+    "_journal": ENTFERNEN,  # Backup: Name des Journals (`aufnahme.JOURNAL`), seit 0.9.2
 }
 SEGMENT_REGELN: dict[str, Any] = {
     "id": KEEP,
@@ -775,14 +777,16 @@ def _urteilen(
     if "unbekannt" in nach_art or "falscher_typ" in nach_art:
         felder = nach_art.get("unbekannt", []) + nach_art.get("falscher_typ", [])
         bericht.ablehnungen.append((datei, "unbekanntes Feld: " + ", ".join(felder)))
-    if "entfernt" in nach_art:  # Backup-Block: nur mit Personenbezug ein Fehler
+    if "entfernt" in nach_art:  # Backup-Felder: nur mit Personenbezug ein Fehler
         block = daten.get("_wiederherstellung")
         if isinstance(block, dict) and block.get("subject_id") not in (None, ""):
             bericht.ablehnungen.append(
                 (datei, "Personenfeld gefüllt: _wiederherstellung.subject_id")
             )
         else:
-            bericht.hinweise.append((datei, "Backup-Block vorhanden: _wiederherstellung"))
+            bericht.hinweise.append(
+                (datei, "Backup-Felder vorhanden: " + ", ".join(nach_art["entfernt"]))
+            )
     if "freitext" in nach_art:
         bericht.hinweise.append((datei, "Freitext vorhanden: " + ", ".join(nach_art["freitext"])))
 

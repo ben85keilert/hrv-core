@@ -57,7 +57,7 @@ und Journal** (lange Aufnahmen: vorher wurde alle 15 s die ganze Datei neu gesch
   direkt hintereinander ebenso.
 - `backup_lesen` setzt beides zusammen; ein Kopf **mit** `messungen` (Backup von vor dem
   Journal, praxis_gui) wird weiter gelesen. `_wiederherstellung` und `_journal` tragen nur
-  `.backup_*`-Dateien; `deid` entfernt sie.
+  `.backup_*`-Dateien; `deid` entfernt beide (`_journal` seit 0.9.2; vorher galt es dort als unbekanntes Feld).
 - **Begleit-Journale** am Stamm des Kopfs: `.backup_<Start>_ecg.jsonl` (EKG, `ekg`),
   `.backup_<Start>_atem.jsonl` (Atemphasen, `atem`, seit 5.11.2026) und
   `.backup_<Start>_mitschnitt.jsonl` (Rohmitschnitt, `mitschnitt`). `backup_entfernen` löscht
@@ -151,7 +151,7 @@ Schläge), 3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetomete
 | `rate_hz` | ja (vom Aufrufer) | Abtastrate der Beschleunigung, `null` wenn keine |
 | `erfasst[]` | ja | `[von_s, bis_s]` je Lauf „Atmung erfassen“; ohne Eintrag ist eine Lücke „nicht gemessen“, nicht „kein Atemzug“. Ein beim Schreiben noch offener Lauf endet mit dem letzten bekannten Zeitpunkt (letzte Phase oder letztes Fenster, sonst `von_s`) |
 | `phasen[]` | ja | `[t_s, "ein" \| "aus"]` — Beginn von Ein- bzw. Ausatmen, zeitlich sortiert |
-| `fenster[]` | ja | `[t_ende_s, rate_pro_min, gueltig, grund]` je Prüffenster (alle 5 s, 30 s lang, Ende des Fensters); ungültig: `rate_pro_min = null` und `grund` als snake_case-Code aus dem Prototyp (`hrv_core.prototyp.atemzuege`, Modultext Punkt 7: `bewegung`, `amplitude_klein`, `kein_gipfel`, `gipfel_undeutlich`, `zu_wenig_zyklen`, `ungleichmaessig`, `zyklen_passen_nicht`), sonst `""` |
+| `fenster[]` | ja | `[t_ende_s, rate_pro_min, gueltig, grund]` je Prüffenster (alle 5 s, 30 s lang, Ende des Fensters); ungültig: `rate_pro_min = null` und `grund` als snake_case-Code aus dem Prototyp — der **erste** Grund seiner Prüfreihenfolge (`hrv_core.prototyp.atemzuege`, Modultext Punkt 7: `bewegung` → `amplitude_klein` → `kein_gipfel` / `gipfel_undeutlich` → `zu_wenig_zyklen` → `ungleichmaessig` / `zyklen_passen_nicht`; der Aufrufer schreibt `gruende[0]`), sonst `""` |
 
 - **Journal** `.backup_<ts>_atem.jsonl` neben dem Crash-Backup (`AtemSammler.journal_anhaengen`,
   `aus_journal`): JSON Lines, jede Zeile für sich abgeschlossen, zuletzt `fsync` — `["k", {kopf}]`,
