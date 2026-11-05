@@ -137,7 +137,9 @@ später praxis_gui (`rohlog`). JSON Lines, nur angehängt, jede Zeile `{"art": �
 (trainingsapp `docs/plan_beschleunigung.md` §7.4/§8: **Ergebnisse statt Rohdaten**, P123).
 Das Ergebnis der Atemerfassung aus dem Beschleunigungssensor neben der Messdatei; der Inhalt
 stammt aus einem Prototyp (`hrv_core.prototyp.atemzuege`, Kennzeichnung `art`/`prototyp`), das
-Format ist stabil. Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (`t_wall_s` wie die
+Format ist stabil. `phasen[]` und `fenster[]` liest der Prototyp `hrv_core.prototyp.atem_hrv`
+(Atem-HRV je Atemzug, seit 0.10.0) zusammen mit den korrigierten Schlägen derselben Messung —
+er schreibt nichts in die Datei. Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (`t_wall_s` wie die
 Schläge), 3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetometer, keine Korrekturen
 (±1 steht in der Zeitleiste der Einheit).
 

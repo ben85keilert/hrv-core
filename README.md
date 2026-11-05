@@ -25,7 +25,8 @@ fester Stand: `{ git = "https://github.com/ben85keilert/hrv-core.git", tag = "v0
   `mitschnitt-v1`, seit 0.6.0), `geraete/` (Dekoder ohne Bluetooth: `pmd` — EKG, PPI,
   Beschleunigung), `prototyp/` (Verfahren nach moderater Reife, gekennzeichnet, nie Grundlage
   gespeicherter Kennzahlen: `wiederholungen` seit 0.8.0, `atemzuege` — Atemzüge und Atemphasen
-  live aus der Beschleunigung — seit 0.9.0).
+  live aus der Beschleunigung — seit 0.9.0, `atem_hrv` — Atem-HRV je Atemzug aus Atemphasen und
+  RR-Abständen — seit 0.10.0).
 - `tests/fixtures/` Messdateien ohne Personenbezug · `tests/golden/trainingsapp/` Golden Master
   (`test_golden_trainingsapp.py`, 1e-9) · `tests/golden/praxis_gui/` Vorher-Stand von praxis_gui
   (scipy/NK2) für `docs/VERGLEICH_ZAHLEN.md` · `tests/referenz/` Vergleich gegen scipy/neurokit2.

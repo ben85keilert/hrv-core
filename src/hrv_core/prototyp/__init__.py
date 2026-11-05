@@ -22,6 +22,10 @@ Module:
 - `atemzuege` — Atemzüge und Atemphasen live aus der Beschleunigung, kausal mit Gültigkeit je
   Fenster (seit 0.9.0; Eingang mit Ausnahme, Entscheidung 24 in hrv-research; Ergebnis im
   Beiwerk `atem-v1`).
+- `atem_hrv` — Atem-HRV je Atemzug aus Atemphasen und RR-Abständen: Spanne, Sinus, Phasenlage,
+  RR je Phase, Gültigkeit mit Gründen, Zusammenfassung; live wie offline (seit 0.10.0; Eingang
+  mit Ausnahme, Entscheidung 25 in hrv-research; liest `phasen[]` und `fenster[]` aus `atem-v1`
+  oder einen Takt).
 
 Nächster Kandidat: Takt und RSA als zweite Stufe der Atmung für Haltungen, die der festen
 Richtung fehlen (Seiten-, Bauchlage, Sensor am Arm; K4, Entscheidung 21).
