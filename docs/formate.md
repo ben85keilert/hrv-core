@@ -136,9 +136,9 @@ später praxis_gui (`rohlog`). JSON Lines, nur angehängt, jede Zeile `{"art": �
 `atem` (`AtemSammler`, `atem_laden`, `atem_pfad`, `atem_journal_pfad`), seit 5.11.2026
 (trainingsapp `docs/plan_beschleunigung.md` §7.4/§8: **Ergebnisse statt Rohdaten**, P123).
 Das Ergebnis der Atemerfassung aus dem Beschleunigungssensor neben der Messdatei; der Inhalt
-stammt aus einem Prototyp (`hrv_core.prototyp`, Kennzeichnung `art`/`prototyp`), das Format ist
-stabil. Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (`t_wall_s` wie die Schläge),
-3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetometer, keine Korrekturen
+stammt aus einem Prototyp (`hrv_core.prototyp.atemzuege`, Kennzeichnung `art`/`prototyp`), das
+Format ist stabil. Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (`t_wall_s` wie die
+Schläge), 3 Nachkommastellen. Keine Rohproben, kein Ort, nichts vom Magnetometer, keine Korrekturen
 (±1 steht in der Zeitleiste der Einheit).
 
 | Feld | Von hrv-core gesetzt | Anmerkung |
@@ -151,7 +151,7 @@ stabil. Alle Zeiten in Sekunden auf der **Wanduhr der Messung** (`t_wall_s` wie 
 | `rate_hz` | ja (vom Aufrufer) | Abtastrate der Beschleunigung, `null` wenn keine |
 | `erfasst[]` | ja | `[von_s, bis_s]` je Lauf „Atmung erfassen“; ohne Eintrag ist eine Lücke „nicht gemessen“, nicht „kein Atemzug“. Ein beim Schreiben noch offener Lauf endet mit dem letzten bekannten Zeitpunkt (letzte Phase oder letztes Fenster, sonst `von_s`) |
 | `phasen[]` | ja | `[t_s, "ein" \| "aus"]` — Beginn von Ein- bzw. Ausatmen, zeitlich sortiert |
-| `fenster[]` | ja | `[t_ende_s, rate_pro_min, gueltig, grund]` je Prüffenster (alle 5 s, 30 s lang, Ende des Fensters); ungültig: `rate_pro_min = null` und `grund` als snake_case-Code aus dem Prototyp (`bewegung`, `amplitude_klein`, `unregelmaessig`, `zu_wenig_zyklen`, `kein_gipfel` …), sonst `""` |
+| `fenster[]` | ja | `[t_ende_s, rate_pro_min, gueltig, grund]` je Prüffenster (alle 5 s, 30 s lang, Ende des Fensters); ungültig: `rate_pro_min = null` und `grund` als snake_case-Code aus dem Prototyp (`hrv_core.prototyp.atemzuege`, Modultext Punkt 7: `bewegung`, `amplitude_klein`, `kein_gipfel`, `gipfel_undeutlich`, `zu_wenig_zyklen`, `ungleichmaessig`, `zyklen_passen_nicht`), sonst `""` |
 
 - **Journal** `.backup_<ts>_atem.jsonl` neben dem Crash-Backup (`AtemSammler.journal_anhaengen`,
   `aus_journal`): JSON Lines, jede Zeile für sich abgeschlossen, zuletzt `fsync` — `["k", {kopf}]`,

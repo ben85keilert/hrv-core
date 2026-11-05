@@ -19,8 +19,12 @@ Module:
 
 - `wiederholungen` — Wiederholungen eines Satzes aus der Beschleunigung (seit 0.8.0; Eingang mit
   Ausnahme, Entscheidung 22 in hrv-research).
+- `atemzuege` — Atemzüge und Atemphasen live aus der Beschleunigung, kausal mit Gültigkeit je
+  Fenster (seit 0.9.0; Eingang mit Ausnahme, Entscheidung 24 in hrv-research; Ergebnis im
+  Beiwerk `atem-v1`).
 
-Nächster Kandidat: die Atmung aus Beschleunigung und RSA (K4, Entscheidung 21).
+Nächster Kandidat: Takt und RSA als zweite Stufe der Atmung für Haltungen, die der festen
+Richtung fehlen (Seiten-, Bauchlage, Sensor am Arm; K4, Entscheidung 21).
 """
 
 from __future__ import annotations
