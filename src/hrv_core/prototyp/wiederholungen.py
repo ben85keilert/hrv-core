@@ -490,8 +490,10 @@ class WdhLive:
     ...     ereignisse += live.rahmen(xyz[i : i + 10], float(t[i]))
     >>> ereignisse += live.abschluss()
     >>> wdh = [e for e in ereignisse if isinstance(e, Wiederholung)]
-    >>> len(wdh), [round(w.t_s, 1) for w in wdh[:3]], live.stand().anzahl  # unten bei 1,25 s …
-    (12, [1.2, 3.8, 6.2], 12)
+    >>> len(wdh), live.stand().anzahl
+    (12, 12)
+    >>> [abs(w.t_s - soll) < 0.1 for w, soll in zip(wdh, (1.25, 3.75, 6.25))]  # Umkehr unten
+    [True, True, True]
     >>> all(0 < w.gemeldet_s - w.t_s < 1.25 for w in wdh)      # Verzug unter einer halben Periode
     True
     >>> live.stand().art
