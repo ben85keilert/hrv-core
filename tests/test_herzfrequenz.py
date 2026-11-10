@@ -296,6 +296,47 @@ def test_erholung_none_wo_daten_fehlen() -> None:
     assert hz.hrr_erholung(r, 2.0).hf_ende is None  # … 2 von 5 nicht (auch vor dem Anfang)
 
 
+def test_intervall_erholung_spitze_anfang_und_tal() -> None:
+    # 20 s Plateau 150, Abfall bis 100, kurzer Anstieg auf 108 (ein Atemzug), weiter bis 96
+    hf = [150.0] * 20 + [150.0 - 2 * i for i in range(25)] + [104.0, 108.0, 108.0, 104.0]
+    hf += [100.0 - i * 0.5 for i in range(8)] + [96.0] * 5 + [99.0] * 20
+    r = _reihe_aus_hf(hf)
+    e = hz.intervall_erholung(r, 5.0, 70.0)
+    # Spitze: letzte Stelle des Plateaus — der zu früh gesetzte Anfang ändert nichts
+    assert e.spitze_hf == pytest.approx(150.0, abs=0.5) and 17.0 <= e.spitze_t <= 20.0
+    assert e.bezug == hz.BEZUG_SPITZE and e.bezug_t == e.spitze_t
+    assert e.hrr == pytest.approx(e.spitze_hf - e.hf_bis) and e.x_s == pytest.approx(
+        70.0 - e.spitze_t
+    )
+    f = hz.intervall_erholung(r, 12.0, 70.0)
+    assert f.hrr == pytest.approx(e.hrr) and f.x_s == pytest.approx(e.x_s)
+    # Das Ende liegt über dem tiefsten Wert danach (99 gegen ~96)
+    assert e.tal_hf is not None and e.tal_t is not None and e.tal_t < 70.0
+    assert e.ueber_tal == pytest.approx(e.hf_bis - e.tal_hf) and e.ueber_tal > 2.0
+    # Der Zwischenanstieg ändert das Ergebnis nicht: nur Bezug und Ende zählen
+    glatt = list(hf)
+    glatt[45:49] = [100.0] * 4
+    g = hz.intervall_erholung(_reihe_aus_hf(glatt), 5.0, 70.0)
+    assert g.hrr == pytest.approx(e.hrr)
+    # Bezug Anfang: HF am Anfang, X = Länge des Intervalls; vertauschte Grenzen gelten
+    a = hz.intervall_erholung(r, 70.0, 30.0, bezug=hz.BEZUG_ANFANG)
+    assert (a.von, a.bis, a.x_s) == (30.0, 70.0, 40.0)
+    assert a.hrr == pytest.approx(a.hf_von - a.hf_bis) and a.delta == pytest.approx(-a.hrr)
+    assert a.als_dict()["bezug"] == "anfang"
+    with pytest.raises(ValueError):
+        hz.intervall_erholung(r, 0.0, 10.0, bezug="mitte")
+
+
+def test_intervall_erholung_none_bei_luecken() -> None:
+    hf = [150.0] * 10 + [float("nan")] * 10 + [120.0] * 10
+    r = _reihe_aus_hf(hf)
+    e = hz.intervall_erholung(r, 5.0, 15.0)  # Ende mitten in der Lücke
+    assert e.hf_bis is None and e.hrr is None and e.x_s is None and e.delta is None
+    assert e.spitze_hf == pytest.approx(150.0)
+    leer = hz.intervall_erholung(r, 13.0, 16.0)
+    assert leer.spitze_hf is None and leer.bezug_t is None and leer.ueber_tal is None
+
+
 def test_drift_und_entkopplung() -> None:
     hf = [130.0] * 300 + [140.0] * 300
     r = _reihe_aus_hf(hf)

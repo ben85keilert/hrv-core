@@ -1202,6 +1202,124 @@ def hrr_erholung(
     return Erholung(float(t0), hf_ende, nach, hrr, kontext, haltung)
 
 
+#: Bezug der abgelesenen Erholung: die Spitze im Intervall oder sein Anfang
+BEZUG_SPITZE: Final[str] = "spitze"
+BEZUG_ANFANG: Final[str] = "anfang"
+#: Ein Mittel so knapp unter dem Höchstwert gilt noch als Spitze (Plateau am Belastungsende)
+SPITZE_TOLERANZ_BPM: Final[float] = 0.5
+
+
+@dataclass(slots=True)
+class IntervallErholung:
+    """Abgelesene Erholung zwischen zwei von Hand gesetzten Zeitpunkten (`intervall_erholung`).
+
+    Alle Herzfrequenzen sind Mittel über ``mittel_s`` (5 s), nie Einzelschläge; fehlt in einem
+    Mittelfenster zu viel, steht None. ``delta = hf_bis − hf_von`` (negativ = gefallen).
+    ``hrr = bezug_hf − hf_bis`` über ``x_s = bis − bezug_t`` Sekunden — „HRR über x_s“.
+    ``ueber_tal = hf_bis − tal_hf``: so weit liegt das Ende über dem tiefsten Wert nach dem
+    Bezug (0, wenn das Ende selbst der tiefste ist).
+    """
+
+    von: float
+    bis: float
+    hf_von: float | None
+    hf_bis: float | None
+    delta: float | None
+    spitze_hf: float | None
+    spitze_t: float | None
+    tal_hf: float | None
+    tal_t: float | None
+    bezug: str
+    bezug_hf: float | None
+    bezug_t: float | None
+    hrr: float | None
+    x_s: float | None
+    ueber_tal: float | None
+
+    def als_dict(self) -> dict[str, Any]:
+        return {f: getattr(self, f) for f in self.__slots__}
+
+
+def intervall_erholung(
+    reihe: HfReihe,
+    von: float,
+    bis: float,
+    *,
+    bezug: str = BEZUG_SPITZE,
+    mittel_s: float = HF_ERHOLUNG_MITTEL_S,
+) -> IntervallErholung:
+    """Erholung in einem von Hand gesetzten Intervall ``[von, bis]`` (Ben, 10.11.2026).
+
+    Die Erholung muss nicht monoton sein (ein Atemzug hebt die HF kurz) — darum zählen nur
+    **zwei** Werte: der Bezug und das Ende, beide als Mittel über ``mittel_s`` um ihre Stelle
+    (dieselbe Mittelung wie `hrr_erholung`). Bezug ist die **Spitze** (höchstes Mittel im
+    Intervall, auf einem Plateau dessen letzte Stelle — die HF steigt nach dem
+    Belastungsende oft noch kurz; ein etwas zu früh gesetzter Anfang ändert dann nichts)
+    oder der **Anfang**. Das **Tal** ist das tiefste
+    Mittel ab dem Bezug; liegt das Ende darüber, sagt ``ueber_tal`` um wie viel — die App
+    bietet dann an, das Ende auf das Tal zu setzen. Lieber None als ein falscher Wert.
+
+    >>> hf = [150.0] * 20 + [150.0 - i for i in range(60)] + [95.0] * 20
+    >>> r = hf_reihe(np.arange(100) + 0.5, [60000 / h for h in hf])
+    >>> e = intervall_erholung(r, 10.0, 90.0)
+    >>> round(e.spitze_hf), round(e.hf_bis), round(e.hrr), e.x_s
+    (150, 95, 55, 70.5)
+    >>> a = intervall_erholung(r, 30.0, 90.0, bezug="anfang")
+    >>> round(a.hf_von), round(a.hrr), round(a.x_s), round(a.ueber_tal, 1)
+    (140, 45, 60, 2.0)
+    """
+    if bezug not in (BEZUG_SPITZE, BEZUG_ANFANG):
+        raise ValueError(f"unbekannter Bezug: {bezug!r}")
+    if bis < von:
+        von, bis = bis, von
+    halb = mittel_s / 2.0
+    hf_von = _mittel_um(reihe, von - halb, von + halb)
+    hf_bis = _mittel_um(reihe, bis - halb, bis + halb)
+    # Zentrierte Mittel je Zelle: `rollmittel` läuft nach, der Wert an Stelle i gehört zur
+    # Mitte des Fensters — (n − 1) / 2 Zellen früher
+    n = max(1, round(mittel_s / reihe.raster_s))
+    spitze_hf = spitze_t = tal_hf = tal_t = None
+    if reihe.n >= n:
+        glatt = rollmittel(reihe.hf, n * reihe.raster_s, raster_s=reihe.raster_s, min_anteil=0.6)
+        mitte = reihe.t - (n - 1) / 2.0 * reihe.raster_s + reihe.raster_s / 2.0
+        im = (mitte >= von) & (mitte <= bis) & ~np.isnan(glatt)
+        if im.any():
+            idx = np.flatnonzero(im)
+            # Auf einem Plateau die **letzte** Stelle (höchstens 0,5 bpm unter dem Höchstwert):
+            # von dort an fällt die HF, und X zählt ab dort
+            oben = idx[glatt[idx] >= glatt[idx].max() - SPITZE_TOLERANZ_BPM]
+            i_sp = int(oben[-1])
+            spitze_hf, spitze_t = float(glatt[i_sp]), float(mitte[i_sp])
+            ab = spitze_t if bezug == BEZUG_SPITZE else von
+            nach = idx[mitte[idx] >= ab]
+            if nach.size:
+                i_tal = int(nach[np.argmin(glatt[nach])])
+                tal_hf, tal_t = float(glatt[i_tal]), float(mitte[i_tal])
+    bezug_hf, bezug_t = (spitze_hf, spitze_t) if bezug == BEZUG_SPITZE else (hf_von, float(von))
+    hrr = x_s = None
+    if bezug_hf is None:
+        bezug_t = None
+    elif hf_bis is not None and bezug_t is not None:
+        hrr, x_s = bezug_hf - hf_bis, float(bis) - bezug_t
+    return IntervallErholung(
+        von=float(von),
+        bis=float(bis),
+        hf_von=hf_von,
+        hf_bis=hf_bis,
+        delta=None if hf_von is None or hf_bis is None else hf_bis - hf_von,
+        spitze_hf=spitze_hf,
+        spitze_t=spitze_t,
+        tal_hf=tal_hf,
+        tal_t=tal_t,
+        bezug=bezug,
+        bezug_hf=bezug_hf,
+        bezug_t=bezug_t,
+        hrr=hrr,
+        x_s=x_s,
+        ueber_tal=None if hf_bis is None or tal_hf is None else max(0.0, hf_bis - tal_hf),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Drift, Entkopplung
 # ---------------------------------------------------------------------------
@@ -1660,6 +1778,8 @@ def median_letzter(werte: Sequence[float], n: int = 5) -> float | None:
 
 __all__ = [
     "ACSM_NAMEN",
+    "BEZUG_ANFANG",
+    "BEZUG_SPITZE",
     "FORMELN",
     "GUELTIG_TAGE",
     "HALTUNGEN",
@@ -1683,6 +1803,7 @@ __all__ = [
     "Fensterwert",
     "Formelwert",
     "HfReihe",
+    "IntervallErholung",
     "Phase",
     "ProfilEintrag",
     "Schwellen",
@@ -1703,6 +1824,7 @@ __all__ = [
     "hf_reihe",
     "hfmax_kandidat",
     "hrr_erholung",
+    "intervall_erholung",
     "median_letzter",
     "nacht_hf",
     "nenner_fortschreiben",

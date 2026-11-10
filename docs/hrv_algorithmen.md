@@ -840,6 +840,18 @@ Konventionen, so beschriftet.
 HF_t für t ∈ {30, 60, 120}; T30 bewusst nicht (`fecchio2019hrr`: nicht reproduzierbar).
 `kontext` und `haltung` sind Pflicht der App; vergleichbar nur innerhalb gleicher Paare.
 
+**Abgelesene Erholung** (`intervall_erholung`, Ben 10.11.2026): Erholung zwischen zwei von
+Hand gesetzten Zeitpunkten `von`/`bis` — die Erholung muss nicht monoton sein (ein Atemzug
+hebt die HF kurz), darum zählen nur **zwei** Werte, beide als 5-s-Mittel um ihre Stelle
+(mindestens 60 % der Zellen, sonst None): der **Bezug** und das **Ende**. Bezug ist die
+**Spitze** (höchstes zentriertes 5-s-Mittel im Intervall; auf einem Plateau die letzte Stelle,
+die höchstens 0,5 bpm darunter liegt — von dort an fällt die HF) oder der **Anfang**.
+HRR = HF_Bezug − HF_Ende über X = `bis` − t_Bezug Sekunden. Dazu HF an beiden Grenzen mit Δ,
+die Spitze und das **Tal** (tiefstes Mittel ab dem Bezug) mit Zeit; `ueber_tal` = HF_Ende −
+HF_Tal sagt, wie weit das Ende über dem tiefsten Wert liegt (die App bietet dann an, das Ende
+aufs Tal zu setzen). Reine Ablesung, kein gespeicherter Kennwert, keine Wertung;
+`ALGO_VERSION` unberührt.
+
 **Drift** (`drift`): Ø HF zweite gegen erste Hälfte eines Abschnitts; mit einer
 Leistungsreihe auf dem Raster (`auf_raster`) die Entkopplung (HF/L zweite Hälfte) / (HF/L
 erste) − 1 in Prozent — ohne Schwelle (die 5-%-Regel ist Trainerkonvention).
