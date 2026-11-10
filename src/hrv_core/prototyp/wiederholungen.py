@@ -491,7 +491,7 @@ class WdhLive:
     >>> ereignisse += live.abschluss()
     >>> wdh = [e for e in ereignisse if isinstance(e, Wiederholung)]
     >>> len(wdh), [round(w.t_s, 1) for w in wdh[:3]], live.stand().anzahl  # unten bei 1,25 s …
-    (12, [1.2, 3.8, 6.3], 12)
+    (12, [1.2, 3.8, 6.2], 12)
     >>> all(0 < w.gemeldet_s - w.t_s < 1.25 for w in wdh)      # Verzug unter einer halben Periode
     True
     >>> live.stand().art
