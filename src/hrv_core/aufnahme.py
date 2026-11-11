@@ -39,11 +39,19 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .constants import AUFNAHME_RR_MAX_MS, AUFNAHME_RR_MIN_MS
+from .constants import (
+    AUFNAHME_RR_MAX_MS,
+    AUFNAHME_RR_MIN_MS,
+    QUALITAET_BPM_ONLY,
+    QUALITAET_PPI_OPTISCH,
+    QUALITAET_RR_EKG,
+    QUELLE_PPG_PPI,
+)
 from .recording import (
     Beat,
     FormatFehler,
@@ -135,6 +143,9 @@ class Aufnahme:
 
         self._ppi = bool(ppi)
         self._beats: list[Beat] = []
+        #: kam schon ein Schlag mit RR-Wert? Daraus folgt `datenqualitaet` im Backup-Kopf,
+        #: ohne alle Schläge anzusehen (`_kopf`)
+        self._hat_rr = False
         self._ppi_pakete: list[dict[str, Any]] = []
         self._herz_ms = 0  # ganze Millisekunden, wie praxis_gui
         self._backup_pfade: set[Path] = set()
@@ -167,6 +178,8 @@ class Aufnahme:
             tw_src=tw_src,
         )
         self._beats.append(beat)
+        if beat.hat_rr:
+            self._hat_rr = True
         return beat
 
     def ppi_paket(
@@ -239,6 +252,53 @@ class Aufnahme:
             ppi_pakete=[dict(p) for p in self._ppi_pakete] if self._ppi else None,
         )
 
+    def _kopf(self) -> dict[str, Any]:
+        """Der Kopf der Messung ohne ``messungen`` — für das Backup.
+
+        Derselbe Inhalt wie ``recording().to_dict()`` ohne die Schläge, aber **ohne sie
+        anzufassen**: Der 15-s-Takt kopierte sonst jedes Mal alle Schläge und PPI-Pakete und
+        baute je Schlag ein Dict, nur um ``messungen`` wieder wegzuwerfen — das Journal soll
+        nach 36 Stunden dasselbe kosten wie nach einer Minute (Durchsicht 10.11.2026, H56).
+        ``datenqualitaet`` steht darum ausdrücklich da, mit der Regel aus
+        `recording._qualitaet_raten`.
+        """
+        if not self._hat_rr:
+            qualitaet = QUALITAET_BPM_ONLY
+        elif self.intervall_quelle == QUELLE_PPG_PPI:
+            qualitaet = QUALITAET_PPI_OPTISCH
+        else:
+            qualitaet = QUALITAET_RR_EKG
+        kopf = replace(
+            self.recording_ohne_messwerte(),
+            datenqualitaet=qualitaet,
+            ppi_pakete=[] if self._ppi else None,  # der Schlüssel bleibt, Pakete im Journal
+        )
+        doc = kopf.to_dict()
+        doc.pop("messungen", None)
+        return doc
+
+    def recording_ohne_messwerte(self) -> Recording:
+        """Wie `recording`, aber ohne Schläge und PPI-Pakete — nur Kopf und Notizen."""
+        return Recording(
+            beats=[],
+            geraet=self.geraet,
+            geraet_profil=self.geraet_profil,
+            adresse=self.adresse,
+            intervall_quelle=self.intervall_quelle,
+            start_utc=self.start_utc,
+            patient_id=self.patient_id,
+            behandlung_id=self.behandlung_id,
+            batterie_prozent=self.batterie_prozent,
+            simulation=self.simulation,
+            titel=self.titel,
+            notiz=self.notiz,
+            ereignisse=[dict(e) for e in self.ereignisse],
+            datum=self.datum,
+            ppg_aufzeichnung=False,
+            ecg_aufzeichnung=bool(self.ecg_aufzeichnung),
+            ppi_pakete=None,
+        )
+
     # -- Schreiben ----------------------------------------------------------
 
     def backup_name(self) -> str:
@@ -271,10 +331,7 @@ class Aufnahme:
         """
         ordner = Path(ordner)
         ordner.mkdir(parents=True, exist_ok=True)
-        doc = self.recording().to_dict()
-        doc.pop("messungen", None)
-        if self._ppi:
-            doc["ppi_pakete"] = []  # der Schlüssel bleibt, die Pakete stehen im Journal
+        doc = self._kopf()
         if zusatz:
             doc[WIEDERHERSTELLUNG] = dict(zusatz)
         doc[JOURNAL] = self.journal_name()

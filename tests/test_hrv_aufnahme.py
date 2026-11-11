@@ -589,3 +589,23 @@ def test_zusammenfuegen_zweier_teile_und_befehlszeile(tmp_path: Path, capsys) ->
     assert ziel.exists() and len(laden(ziel).beats) == 25
     assert "25 Schläge aus 2 Teilen" in capsys.readouterr().out
     assert main([str(teil1), str(teil2)]) == 1  # gibt es schon
+
+
+@pytest.mark.parametrize("mit_rr", [False, True])
+@pytest.mark.parametrize("bauer", [h10, verity])
+def test_backup_kopf_ist_der_kopf_der_messung_ohne_die_schlaege_anzufassen(bauer, mit_rr) -> None:
+    """H56 (Durchsicht 10.11.2026): Der Kopf für das Backup entsteht ohne Kopie der Schläge —
+    und ist Feld für Feld derselbe wie ``recording().to_dict()`` ohne ``messungen``, auch
+    ``datenqualitaet`` (ohne einen RR-Wert ``bpm_only``)."""
+    a = bauer()
+    a.titel, a.notiz = "Ruhe", "liegend"
+    a.schlag(0, 70, START_MONO + 0.5, "m")
+    if mit_rr:
+        a.schlag(800, 75, START_MONO + 1.3, "m")
+    erwartet = a.recording().to_dict()
+    erwartet.pop("messungen")
+    if "ppi_pakete" in erwartet:
+        erwartet["ppi_pakete"] = []
+    kopf = a._kopf()
+    assert kopf == erwartet and list(kopf) == list(erwartet)
+    assert kopf["datenqualitaet"] == ("bpm_only" if not mit_rr else erwartet["datenqualitaet"])
