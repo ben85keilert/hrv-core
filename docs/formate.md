@@ -80,7 +80,10 @@ Nur gelesen (`Recording.from_dict`, ohne `t_wall_s`). Wird von hrv-core nicht ge
 ## `analysis-v1` — Sidecar `sensor_<ts>_analyzed.json`
 
 `korrektur.analyse_speichern`/`analyse_lesen`, `ausschnitte.zusatz_speichern`/`zusatz_lesen`,
-`ereignisse.metadaten_schreiben` (frischt nur `source_file_sha1` auf). Ein
+`ereignisse.metadaten_schreiben` (frischt nur `source_file_sha1` auf — und nur, wenn das
+Sidecar vorher zur Messdatei passte oder keine Prüfsumme trug: ein veraltetes bleibt veraltet,
+seit 11.11.2026; praxis_gui frischt in `analysis_io.refresh_sidecar_sha1` ohne diese Prüfung
+auf). Ein
 vorhandenes Sidecar wird **fortgeschrieben**, fremde Felder (praxis_gui) bleiben.
 
 | Feld | Von hrv-core gesetzt | Anmerkung |

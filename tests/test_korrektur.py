@@ -553,8 +553,16 @@ def test_sidecar_meldet_veraltete_pruefsumme_statt_zu_werfen(tmp_path: Path) -> 
     assert sidecar_veraltet(roh) is True
     assert analyse_laden(roh) == alt.korrekturen  # unveränderte Schnittstelle
 
-    # Metadaten schreiben frischt die Prüfsumme auf — danach wieder gültig
+    # Metadaten schreiben macht ein veraltetes Sidecar nicht wieder gültig (H71, 11.11.2026:
+    # vorher frischte eine Notiz die Prüfsumme auf, alter Zuschnitt und Korrektur galten
+    # dann still für die fremde Datei) — erst neu gespeicherte Korrekturen tun das
     metadaten_schreiben(roh, titel="Ruhe")
+    assert sidecar_veraltet(roh) is True
+    rec = laden(roh)
+    analyse_speichern(roh, rec, alle_vorschlaege(rec))
+    assert sidecar_veraltet(roh) is False
+    # … und ein gültiges zieht mit den Metadaten mit
+    metadaten_schreiben(roh, titel="Abend")
     assert sidecar_veraltet(roh) is False
 
     # Sidecar ohne Prüfsumme (ältere praxis_gui-Fassung): kein Urteil

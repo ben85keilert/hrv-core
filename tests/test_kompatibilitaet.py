@@ -248,3 +248,32 @@ def test_metadaten_schreiben_reiht_fehlenden_titel_vor_messungen_ein(tmp_path: P
     doc = json.loads(pfad.read_text(encoding="utf-8"))
     assert list(doc) == ["geraet", "notiz", "titel", "ereignisse", "messungen"]
     assert doc["titel"] == "Ruhe" and doc["notiz"] == "x"
+
+
+def test_metadaten_schreiben_macht_ein_veraltetes_sidecar_nicht_wieder_gueltig(
+    tmp_path: Path,
+) -> None:
+    """H71 (Durchsicht 10.11.2026): Die Prüfsumme im Sidecar zieht nur mit, wenn es vorher zur
+    Messdatei gehörte. Ein veraltetes (Korrektur und Zuschnitt einer anderen Fassung) bleibt
+    veraltet — eine Notiz oder ein Titel machte es sonst still wieder gültig."""
+    import hashlib
+
+    from hrv_core.ereignisse import metadaten_schreiben
+
+    pfad = tmp_path / "sensor_2026-05-23_125422.json"
+    pfad.write_text(json.dumps({"geraet": "H10", "titel": "", "messungen": []}), encoding="utf-8")
+    sidecar = tmp_path / "sensor_2026-05-23_125422_analyzed.json"
+
+    def sha1() -> str:
+        return hashlib.sha1(pfad.read_bytes()).hexdigest()
+
+    # passend: zieht mit
+    sidecar.write_text(json.dumps({"source_file_sha1": sha1(), "crop": [1, 2]}), encoding="utf-8")
+    neu = metadaten_schreiben(pfad, titel="Ruhe")
+    assert neu == sha1()
+    assert json.loads(sidecar.read_text(encoding="utf-8"))["source_file_sha1"] == neu
+    # veraltet: bleibt, wie es ist
+    fremd = {"source_file_sha1": "0" * 40, "crop": [100, 200]}
+    sidecar.write_text(json.dumps(fremd), encoding="utf-8")
+    metadaten_schreiben(pfad, titel="Abend")
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == fremd

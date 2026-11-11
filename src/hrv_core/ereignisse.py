@@ -439,7 +439,8 @@ def metadaten_schreiben(pfad: Path | str, **felder: Any) -> str:
     Wert für Wert erhalten; ein Feld, das die Datei noch nicht hatte (Altdatei
     ohne ``titel``), kommt vor ``messungen`` zu stehen, nicht dahinter (F21).
     Danach bekommt ein vorhandenes Sidecar die neue Prüfsumme, sonst hielte
-    praxis_gui es für veraltet.
+    praxis_gui es für veraltet — aber nur, wenn es vorher zur Datei passte: ein
+    schon veraltetes Sidecar bleibt veraltet.
 
     Returns:
         SHA1 der neu geschriebenen Datei.
@@ -463,6 +464,7 @@ def metadaten_schreiben(pfad: Path | str, **felder: Any) -> str:
     if neu:
         # Fehlende Metadaten vor `messungen` einreihen (Lesbarkeit, wie der Schreiber)
         doc = _vor_messungen(doc, neu)
+    vorher = _sha1(pfad)
     json_atomar_schreiben(pfad, doc)
     neu = _sha1(pfad)
     sidecar = pfad.with_name(pfad.stem + "_analyzed.json")
@@ -472,7 +474,12 @@ def metadaten_schreiben(pfad: Path | str, **felder: Any) -> str:
                 sc = json.load(f)
         except (OSError, ValueError):
             return neu
-        if isinstance(sc, dict):
+        # Nur ein Sidecar, das **zu dieser Messdatei gehörte**, zieht mit. Ein veraltetes
+        # (andere Prüfsumme: Korrektur, Zuschnitt und Abschnitte einer anderen Fassung)
+        # würde sonst durch eine einzige Notiz still wieder gültig (Durchsicht 10.11.2026,
+        # H71) — es bleibt veraltet, bis die Auswertung es neu schreibt.
+        # Ein Sidecar ohne Prüfsumme (ältere praxis_gui-Fassung) bekommt sie wie bisher.
+        if isinstance(sc, dict) and sc.get("source_file_sha1") in (None, vorher):
             sc["source_file_sha1"] = neu
             sc["updated_utc"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             json_atomar_schreiben(sidecar, sc)
