@@ -19,6 +19,9 @@ Regeln:
   Notiz „Teil n“ mit Marke ``{"quelle": "zusammenfuegen", "art": "teil"}``.
 - **PPI-Pakete** (Verity) rücken auf der Wanduhr mit.
 - ``notiz`` der Teile wird zusammengehängt, wenn sie sich unterscheiden.
+- Der Kopf kommt vom ersten Teil, mit zwei Ausnahmen: ``ecg_aufzeichnung`` ist immer
+  ``false`` (neben der neuen Datei liegt kein Roh-EKG), und das Protokollfeld ``atmung``
+  bleibt nur, wenn alle Teile dasselbe sagen — sonst fehlt es (unbekannt).
 
 Die Teile selbst bleiben unverändert (Rohdaten); die neue Datei heißt nach dem Start des
 ersten Teils mit dem Zusatz ``_zusammen``.
@@ -56,6 +59,17 @@ def zusammenfuegen(teile: Sequence[Recording]) -> Recording:
     [('x', 1, 1.6), ('Teil 2', 2, 10.9)]
     >>> z.titel, z.start_utc == s
     ('Nacht', True)
+
+    ``atmung`` gilt nur, wenn alle Teile dasselbe sagen; ein Roh-EKG gibt es daneben nie:
+
+    >>> spontan, takt = {"atmung": {"modus": "spontan"}}, {"atmung": {"modus": "getaktet"}}
+    >>> zusammenfuegen([replace(a, extra=spontan, ecg_aufzeichnung=True),
+    ...                 replace(b, extra=takt)]).extra
+    {}
+    >>> z = zusammenfuegen([replace(a, extra=spontan, ecg_aufzeichnung=True),
+    ...                     replace(b, extra=spontan)])
+    >>> z.extra, z.ecg_aufzeichnung
+    ({'atmung': {'modus': 'spontan'}}, False)
     """
     geordnet = sorted(teile, key=lambda r: r.start_utc or _OHNE)
     if not geordnet:
@@ -106,6 +120,12 @@ def zusammenfuegen(teile: Sequence[Recording]) -> Recording:
                 ppi.append(q)
         if teil.notiz and teil.notiz.strip() and teil.notiz.strip() not in notizen:
             notizen.append(teil.notiz.strip())
+    # Zwei Angaben des ersten Teils gelten nicht für das Ganze: Ein Roh-EKG liegt neben der
+    # neuen Datei nicht, und das Protokollfeld ``atmung`` nur, wenn alle Teile dasselbe sagen —
+    # sonst fehlt es (= unbekannt), statt mit dem Modus des ersten Teils zu rechnen.
+    extra = dict(erster.extra)
+    if any(r.extra.get("atmung") != erster.extra.get("atmung") for r in geordnet):
+        extra.pop("atmung", None)
     return replace(
         erster,
         beats=beats,
@@ -113,6 +133,8 @@ def zusammenfuegen(teile: Sequence[Recording]) -> Recording:
         ppi_pakete=ppi,
         notiz="\n".join(notizen),
         titel=next((r.titel for r in geordnet if r.titel), ""),
+        ecg_aufzeichnung=False,
+        extra=extra,
     )
 
 
