@@ -19,7 +19,10 @@ Regeln:
   Notiz „Teil n“ mit Marke ``{"quelle": "zusammenfuegen", "art": "teil"}``.
 - **PPI-Pakete** (Verity) rücken auf der Wanduhr mit.
 - ``notiz`` der Teile wird zusammengehängt, wenn sie sich unterscheiden.
-- Der Kopf kommt vom ersten Teil, mit zwei Ausnahmen: ``ecg_aufzeichnung`` ist immer
+- Zusammenfügen lassen sich nur **gleiche Aufnahmen** (dieselbe ``intervall_quelle``).
+- ``datenqualitaet`` wird aus den Schlägen aller Teile neu bestimmt, ``batterie_prozent``
+  kommt vom letzten Teil, der sie nennt.
+- Der Kopf kommt sonst vom ersten Teil, mit zwei Ausnahmen: ``ecg_aufzeichnung`` ist immer
   ``false`` (neben der neuen Datei liegt kein Roh-EKG), und das Protokollfeld ``atmung``
   bleibt nur, wenn alle Teile dasselbe sagen — sonst fehlt es (unbekannt).
 
@@ -70,13 +73,37 @@ def zusammenfuegen(teile: Sequence[Recording]) -> Recording:
     ...                     replace(b, extra=spontan)])
     >>> z.extra, z.ecg_aufzeichnung
     ({'atmung': {'modus': 'spontan'}}, False)
+
+    Qualität aus allen Schlägen, Batterie vom letzten Teil; nur gleiche Aufnahmen:
+
+    >>> ohne_rr = Recording(beats=[Beat(1.0, 0, 60, 1.0)], start_utc=s - timedelta(seconds=5),
+    ...                     datenqualitaet="bpm_only", batterie_prozent=80)
+    >>> z = zusammenfuegen([ohne_rr, replace(a, batterie_prozent=70)])
+    >>> z.effektive_qualitaet(), z.batterie_prozent
+    ('rr_ekg', 70)
+    >>> zusammenfuegen([a, replace(b, intervall_quelle="ppg_ppi")])
+    Traceback (most recent call last):
+        ...
+    ValueError: Verschiedene intervall_quelle — zusammenfügen lassen sich nur gleiche Aufnahmen.
+    >>> zusammenfuegen([a, replace(b, start_utc=datetime(2026, 10, 28, 9, 0))])
+    Traceback (most recent call last):
+        ...
+    ValueError: Startzeiten mit und ohne Zeitzone lassen sich nicht ordnen.
     """
-    geordnet = sorted(teile, key=lambda r: r.start_utc or _OHNE)
-    if not geordnet:
+    if not teile:
         raise ValueError("Keine Teile.")
-    erster = geordnet[0]
-    if erster.start_utc is None or any(r.start_utc is None for r in geordnet):
+    if any(r.start_utc is None for r in teile):
         raise ValueError("Jeder Teil braucht eine Startzeit (start_utc).")
+    if len({r.start_utc.tzinfo is None for r in teile if r.start_utc is not None}) > 1:
+        raise ValueError("Startzeiten mit und ohne Zeitzone lassen sich nicht ordnen.")
+    # Nur gleiche Aufnahmen (Ben, 11.11.2026): EKG-RR und optische PPI hintereinander gäben
+    # eine Naht, die die Frequenzrechnung auseinanderreißt — das bräuchte einen eigenen Weg
+    if len({r.intervall_quelle for r in teile}) > 1:
+        raise ValueError(
+            "Verschiedene intervall_quelle — zusammenfügen lassen sich nur gleiche Aufnahmen."
+        )
+    geordnet = sorted(teile, key=lambda r: r.start_utc or _OHNE)
+    erster = geordnet[0]
     beats: list[Beat] = []
     ereignisse: list[dict[str, Any]] = []
     ppi: list[dict[str, Any]] | None = None
@@ -135,6 +162,13 @@ def zusammenfuegen(teile: Sequence[Recording]) -> Recording:
         titel=next((r.titel for r in geordnet if r.titel), ""),
         ecg_aufzeichnung=False,
         extra=extra,
+        # Qualität aus den Schlägen aller Teile (Teil 1 ohne RR, Teil 2 mit: nicht
+        # „bpm_only“ für alles), Batterie vom letzten Teil, der eine nennt
+        datenqualitaet=None,
+        batterie_prozent=next(
+            (r.batterie_prozent for r in reversed(geordnet) if r.batterie_prozent is not None),
+            None,
+        ),
     )
 
 
