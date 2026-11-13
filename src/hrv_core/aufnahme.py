@@ -56,6 +56,7 @@ from .recording import (
     Beat,
     FormatFehler,
     Recording,
+    dateistempel,
     freier_pfad,
     json_atomar_schreiben,
     json_objekt_lesen,
@@ -302,11 +303,12 @@ class Aufnahme:
     # -- Schreiben ----------------------------------------------------------
 
     def backup_name(self) -> str:
-        """``.backup_<UTC-Start>.json`` — wie praxis_gui (`_start_backup`)."""
-        return f".backup_{self.start_utc.strftime('%Y-%m-%d_%H%M%S')}.json"
+        """``.backup_<Start in Ortszeit>.json`` — derselbe Zeitstempel wie die Messdatei
+        (`recording.dateistempel`; bis 13.11.2026 UTC-Start wie praxis_gui `_start_backup`)."""
+        return f".backup_{dateistempel(self.start_utc)}.json"
 
     def journal_name(self) -> str:
-        """``.backup_<UTC-Start>.jsonl`` — das Journal neben dem Kopf."""
+        """``.backup_<Start in Ortszeit>.jsonl`` — das Journal neben dem Kopf."""
         return self.backup_name() + "l"
 
     def dateiname(self) -> str:

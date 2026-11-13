@@ -13,7 +13,37 @@ steht; was sie nicht kennt, entfernt `deid.deidentifizieren` und lehnt
 > optionales Feld — nie ein stilles Umdeuten (CLAUDE.md). Neue Felder zuerst im
 > Vertrag der trainingsapp eintragen, dann hier und in `deid.REGELN`.
 
-## `raw-v1` — Messdatei `sensor_<UTC-Start>.json`
+## Zeitstempel in Dateinamen: Ortszeit
+
+**Seit 13.11.2026 (Ben): Der Zeitstempel `<ts>` in Dateinamen ist die Ortszeit des Starts**,
+`JJJJ-MM-TT_HHMMSS`, aus **einer** Funktion: `recording.dateistempel`. Sie benennt die
+Messdatei (`messdatei_name`), das Crash-Backup (`Aufnahme.backup_name`) und in der
+trainingsapp die Streckendatei `strecke_<ts>.jsonl` (`data.strecken.dateiname`); das Beiwerk
+(`_analyzed`, `_ecg`, `_atem`, `_mitschnitt`, `__cNN` …) erbt den Stamm der Messdatei.
+Anlass: Messung (UTC) und Strecke (Ortszeit) desselben Trainings trugen verschiedene Uhren
+im Namen — eine Messung, die um 15:05 Uhr begann, hieß `…_140500` und sah aus wie eine von
+14:05 Uhr.
+
+- **Der Name ist für den Menschen, die Zeit steht in der Datei:** `start_utc` (UTC, mit `Z`)
+  ist die Wahrheit, `datum` das Ortsdatum. Kein Code liest die Zeit aus dem Namen; Dateien
+  finden einander über gespeicherte Pfade und den Stamm, nie über einen nachgerechneten Stempel.
+- **Ortszeit** heißt: Zone des Geräts im Augenblick des Benennens (`datetime.astimezone()`),
+  mit der Sommerzeitregel des Startzeitpunkts. Eine Zeit ohne Zone gilt als UTC.
+- **Altdateien behalten ihren Namen.** Was vor der Umstellung geschrieben wurde, trägt UTC
+  (trainingsapp bis 0.3.91, hrv-core bis 0.14.0, praxis_gui vom 16.10. bis 13.11.2026; davor dort
+  die lokale Stoppzeit) — nichts wird umbenannt, weil Einheiten,
+  Strecken und Sidecars auf die Namen verweisen. Bei einer Altdatei sagt nur `start_utc`,
+  wann sie begann.
+- **Doppelte Stunde** am Ende der Sommerzeit: zwei Starts im Abstand von genau einer Stunde
+  können denselben Namen ergeben — `freier_pfad` hängt `_1` an. Über diese Stunde und über
+  den Tag der Umstellung hinweg sortieren Namen nicht streng nach der Zeit; wer ordnet,
+  nimmt `start_utc`.
+- **Beide Apps:** praxis_gui schreibt mit eigenem Code (`widget.py`, `main.py`), nimmt den
+  Stempel aber aus derselben Funktion — Messdatei, Backup, wiederhergestelltes Backup,
+  Sitzungskennung, Generator (`OFFENE_PUNKTE.md` F24). Wer einen neuen Schreiber baut,
+  ruft `dateistempel`, nie selbst `strftime`.
+
+## `raw-v1` — Messdatei `sensor_<Start in Ortszeit>.json`
 
 Modul `recording` (`Recording.to_dict`/`from_dict`, `laden`, `speichern`), Schreiber
 während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxis_gui.
@@ -27,7 +57,7 @@ während der Aufnahme `aufnahme.Aufnahme`. Feldfolge wie der Schreiber von praxi
 | `datenqualitaet` | ja | Erweiterung der trainingsapp: `rr_ekg`, `ppi_optisch`, `bpm_only` (`Recording.effektive_qualitaet`) |
 | `simulation`, `generator_config` | ja | Synthetik liegt unter `Messungen/Generator` (`messordner`) |
 | `schema`, `analyzed` | wie gelesen; neu `raw-v1`/`false` | Altdateien ohne `schema` bleiben ohne (F16) |
-| `start_utc` | ja | `YYYY-MM-DDTHH:MM:SSZ`; bestimmt den Dateinamen (`messdatei_name`) |
+| `start_utc` | ja | `YYYY-MM-DDTHH:MM:SSZ`; bestimmt den Dateinamen (`messdatei_name`, dort in Ortszeit umgerechnet — siehe oben) |
 | `batterie_prozent`, `ecg_aufzeichnung`, `ppg_aufzeichnung` | ja | |
 | `ppi_pakete` | nur Geräte mit PPI | Vertrag 3b; `ppi.py` leitet daraus Zeitachse, Nähte, Wiederaufnahme ab |
 | `atmung` | nein (trainingsapp, seit 5.11.2026) | Protokollfeld „Atmung“ (P125, Vertrag §3/§5 der trainingsapp): `{"art": "spontan" \| "getaktet" \| "uebung", "takt_pro_min": 6.0, "uebung": "<Kurzcode>"}` — `takt_pro_min` nur bei `getaktet`, `uebung` nur bei `uebung`; fehlt = unbekannt (Altdateien). Bleibt über `extra` erhalten, `deid` behält es als Ganzes |
@@ -41,7 +71,7 @@ wird eine vorhandene Datei nie ersetzt (`recording.freier_pfad`: `_1`, `_2` …)
 Dateinamen mit `_analyzed`, `_ecg`, `_ppg`, `_truth`, `_atem` und `__cNN` sind keine
 Messdateien (`ist_messdatei`), Endungen außer `.json` ebenso (`_mitschnitt.jsonl`).
 
-## Crash-Backup `.backup_<UTC-Start>.json` + `.jsonl`
+## Crash-Backup `.backup_<Start in Ortszeit>.json` + `.jsonl`
 
 `aufnahme.Aufnahme.backup` / `backup_lesen` / `backup_entfernen` — seit 28.10.2026 **Kopf
 und Journal** (lange Aufnahmen: vorher wurde alle 15 s die ganze Datei neu geschrieben,

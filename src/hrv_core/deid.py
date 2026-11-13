@@ -16,7 +16,7 @@ Zwei Aufgaben, beide ohne Personenbezug im Code:
     19.10.2026 leerte eine Schwarzliste nur zwei Top-Level-Felder (Befund F12).
 
     **Bewusst erhalten** (Ben, 19.10.2026, Befund F13): ``start_utc``, ``datum``,
-    ``wall_time`` und der Dateiname mit der UTC-Startsekunde. Tagesdatum und
+    ``wall_time`` und der Dateiname mit der Startsekunde (Ortszeit, Altdateien UTC). Tagesdatum und
     Tageszeit sind für HRV-Aussagen wichtig (Tagesrhythmus, Abstand zu Mahlzeit
     und Training); zusammen mit dem Praxiskalender wären sie re-identifizierend —
     darum liegen die Kopien nur im privaten Repo hrv-research (``$HRV_TESTDATA``),

@@ -76,7 +76,7 @@ TA ist der neue Standard; praxis_gui ändert sich an diesen Stellen. Vorher/Nach
 | Lange Messungen ≥ 4000 s | drei Wege (LF/HF 5 min, VLF 30 min Hann, ULF) | Deckel 2000 Bins → Trapez überschätzt | Kurzmessungen unverändert | |
 | Live-Grenzen | 250–2000 (über Regeln) | 300–2000 im Live-Puffer | Angleichung auf 250 | |
 | RR-Grenze in Nebenpfaden | — | 300 ms in `poincare_widget`, `nk2_analysis`, Prüfbericht, Generator | über den Adapter vereinheitlichen | |
-| Dateiname | UTC-Start | lokale Stoppzeit | Format-Frage, nicht Algorithmus; Phase 3 praxis_gui? | |
+| Dateiname | UTC-Start (seit 13.11.2026: Start in Ortszeit) | lokale Stoppzeit (seit Phase 3: UTC-Start; seit 13.11.2026: Start in Ortszeit) | Format-Frage, nicht Algorithmus; seit 13.11.2026 in beiden Apps `recording.dateistempel`, F24 | |
 | `__cNN` in Messungsliste | nicht gelistet | gelistet | App-Frage | |
 | Expertenmodus live | Regeln wirken live (`LiveFenster.regeln_setzen`) | feste Grenzen | praxis_gui-Live nutzt `LiveFenster`? | |
 | Randartefakte (ALGO 8, 19.10.2026) | Kette mit nur einem oder keinem Anker → ausschließen; ein `interpolate` ohne zwei Anker wirkt wie `delete` | Plateau aus dem einzigen Nachbarn; ohne Anker bleibt der Rohwert | praxis_gui zeigt für denselben Sidecar am Rand ein Plateau, hrv-core eine Lücke (`docs/korrektur.md`) | Ben, 19.10.2026: lieber Lücke |
@@ -142,6 +142,12 @@ TA ist der neue Standard; praxis_gui ändert sich an diesen Stellen. Vorher/Nach
 - **Dateinamen nach UTC-Start** (`sensor_<UTC-Start>.json`, wie trainingsapp) — genauer und
   international vergleichbar; die Anzeige rechnet in Ortszeit um. praxis_gui stellt in Phase 3 um
   (Erkennung bleibt am Muster `sensor_*.json`, Altdateien bleiben lesbar).
+  **Geändert (Ben, 2026-11-13): Start in Ortszeit** (`recording.dateistempel`) in beiden Apps —
+  Messdatei, Backup, Sitzungskennung, dazu die Streckendatei der trainingsapp.
+  Anlass: Messung (UTC) und Strecke (Ortszeit) desselben Trainings trugen verschiedene Uhren
+  im Namen. Die genaue Zeit bleibt `start_utc` in der Datei; Altdateien behalten ihren
+  UTC-Namen (`docs/formate.md`, „Zeitstempel in Dateinamen“). praxis_gui schreibt mit eigenem
+  Code, nimmt den Stempel aber aus derselben Funktion (`OFFENE_PUNKTE.md` F24).
 
 ## Stand nach Phase 3 (2026-10-16)
 
@@ -154,7 +160,7 @@ Poincaré, DFA, SampEn, Atmung). Umgesetzt aus G: Kubios, `compute_nonlinear`
 entfallen; Spektrogramm und Spektralprofil liegen in hrv-core (0.2.0);
 Rolling/Segment/Overlap laufen über `trends.verlauf` (Raster statt je Schlag,
 Live-Neuaufbau je Schlag); Live-Grenzen 250 ms; astropy raus; Dateinamen nach
-UTC-Start. Offen (OFFENE_PUNKTE R13/R14): `sensor_verwerfung = "selbst"` und
+UTC-Start (seit 13.11.2026 in beiden Apps: Start in Ortszeit, F24). Offen (OFFENE_PUNKTE R13/R14): `sensor_verwerfung = "selbst"` und
 `LiveFenster` in praxis_gui.
 
 ## F. Vorgehen Phase 2 (nach Freigabe)

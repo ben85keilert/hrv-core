@@ -9,7 +9,7 @@ Weißliste je Feld (`hrv_core.deid.REGELN`): Personenfelder werden ``null``,
 der Gerätename verliert seine Seriennummer, unbekannte Felder und der
 Backup-Block fallen weg, Freitext wird gemeldet — das Protokoll nennt nur
 Feldpfade, nie Inhalte. **Bewusst erhalten** bleiben ``start_utc``, ``datum``,
-``wall_time`` und der Dateiname mit der UTC-Startsekunde (Ben, 19.10.2026:
+``wall_time`` und der Dateiname mit der Startsekunde (Ben, 19.10.2026:
 Tagesdatum und Tageszeit sind für HRV-Aussagen wichtig); darum gehören die
 Kopien nur in den Testdatenordner des privaten Repos hrv-research, nie in
 hrv-core. Danach ``python scripts/pruefe_daten.py`` laufen lassen.

@@ -8,7 +8,9 @@ werden, deren Herzuhr aber anders läuft als in der Praxissoftware.
 from __future__ import annotations
 
 import json
+import os
 import time
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -26,6 +28,29 @@ from hrv_core.recording import (
 )
 
 START_UTC = datetime(2026, 10, 12, 8, 0, 0, tzinfo=UTC)
+#: Zeitstempel im Dateinamen: Ortszeit (`recording.dateistempel`, seit 13.11.2026) — in den
+#: Tests feste Zone Berlin (`berlin`), dort ist START_UTC 10:00 Uhr Sommerzeit.
+START_NAME = "2026-10-12_100000"
+
+
+@pytest.fixture
+def berlin(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Ortszeit Berlin für Tests, die einen Dateinamen erwarten — sonst hinge er am Rechner."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("TZ lässt sich nur unter Unix setzen")
+    alt = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Berlin"
+    time.tzset()
+    try:
+        yield
+    finally:
+        if alt is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = alt
+        time.tzset()
+
+
 START_MONO = 5000.0
 GOLDEN = Path(__file__).parent / "fixtures" / "trainingsapp" / "sensor_2026-05-23_125422.json"
 
@@ -220,11 +245,13 @@ def _gefuellt(a: Aufnahme, n: int = 20) -> Aufnahme:
     return a
 
 
-def test_dateiname_und_ordner(tmp_path: Path) -> None:
+def test_dateiname_und_ordner(tmp_path: Path, berlin: None) -> None:
+    """Der Name trägt die Ortszeit des Starts, nicht UTC (Ben, 13.11.2026)."""
     ordner = messordner(tmp_path, "PolarH10")
     pfad = _gefuellt(h10()).speichern(ordner)
 
-    assert pfad == tmp_path / "Messungen" / "PolarH10" / "sensor_2026-10-12_080000.json"
+    assert pfad == tmp_path / "Messungen" / "PolarH10" / f"sensor_{START_NAME}.json"
+    assert json.loads(pfad.read_text(encoding="utf-8"))["start_utc"] == "2026-10-12T08:00:00Z"
     assert ist_messdatei(pfad)
     assert messordner(tmp_path, "PolarH10", simulation=True).name == "Generator"
 
@@ -257,7 +284,7 @@ def test_round_trip_speichern_laden(tmp_path: Path) -> None:
     assert nochmal.read_bytes() == pfad.read_bytes()
 
 
-def test_backup_atomar_kompakt_und_nach_speichern_geloescht(tmp_path: Path) -> None:
+def test_backup_atomar_kompakt_und_nach_speichern_geloescht(tmp_path: Path, berlin: None) -> None:
     """Kopf und Journal (28.10.2026): Der Kopf ist die Datei ohne Schläge, das Journal eine
     Zeile je Schlag; ein weiteres Backup hängt nur an und lässt den Kopf, wie er ist."""
     from hrv_core.aufnahme import JOURNAL
@@ -265,14 +292,14 @@ def test_backup_atomar_kompakt_und_nach_speichern_geloescht(tmp_path: Path) -> N
     a = _gefuellt(h10())
     backup = a.backup(tmp_path)
 
-    assert backup.name == ".backup_2026-10-12_080000.json"
+    assert backup.name == f".backup_{START_NAME}.json"  # derselbe Stempel wie die Messdatei
     assert not ist_messdatei(backup)
     text = backup.read_text(encoding="utf-8")
     assert "\n" not in text  # kompakt
     doc = json.loads(text)
     assert doc["schema"] == "raw-v1"
     assert "hrv" not in doc  # Rohdatenrettung, keine Analyse
-    assert "messungen" not in doc and doc[JOURNAL] == ".backup_2026-10-12_080000.jsonl"
+    assert "messungen" not in doc and doc[JOURNAL] == f".backup_{START_NAME}.jsonl"
     journal = tmp_path / doc[JOURNAL]
     assert len(journal.read_text(encoding="utf-8").splitlines()) == 20
     assert not list(tmp_path.glob("*.tmp"))
@@ -304,7 +331,7 @@ def test_abgebrochenes_schreiben_laesst_backup_unversehrt(
     def kaputt(*_args, **_kw):
         raise OSError("Datenträger voll")
 
-    journal = tmp_path / ".backup_2026-10-12_080000.jsonl"
+    journal = tmp_path / a.journal_name()
     journal_vorher = journal.read_bytes()
     monkeypatch.setattr(recording_mod.json, "dump", kaputt)
     a.schlag(800, 75, START_MONO + 30, "m")  # etwas Neues fürs Journal
@@ -446,17 +473,17 @@ def test_backups_finden_nur_in_geraeteordnern(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_vorhandene_messdatei_wird_nie_ueberschrieben(tmp_path: Path) -> None:
+def test_vorhandene_messdatei_wird_nie_ueberschrieben(tmp_path: Path, berlin: None) -> None:
     """Befund F10: zwei Aufnahmen mit derselben Startsekunde — die erste blieb nicht."""
     ordner = messordner(tmp_path, "PolarH10")
     erste = _gefuellt(h10()).speichern(ordner)
     zweite = _gefuellt(h10(), n=30).speichern(ordner)
-    assert erste.name == "sensor_2026-10-12_080000.json"
-    assert zweite.name == "sensor_2026-10-12_080000_1.json"
+    assert erste.name == f"sensor_{START_NAME}.json"
+    assert zweite.name == f"sensor_{START_NAME}_1.json"
     assert ist_messdatei(zweite)
     assert len(laden(erste).beats) == 20 and len(laden(zweite).beats) == 30
     dritte = speichern(laden(erste), ordner)  # auch der Modulweg zählt hoch
-    assert dritte.name == "sensor_2026-10-12_080000_2.json"
+    assert dritte.name == f"sensor_{START_NAME}_2.json"
     # der vorab bekannte Name ist dann nicht mehr der tatsächliche — maßgeblich ist der Pfad
     vierte = _gefuellt(h10())
     assert vierte.speichern(ordner).name != vierte.dateiname()
@@ -492,11 +519,8 @@ def test_ohne_startzeit_tragen_dateiname_und_kopf_dieselbe_sekunde(tmp_path: Pat
     pfad = speichern(rec, tmp_path)
     doc = json.loads(pfad.read_text(encoding="utf-8"))
     im_namen = pfad.stem.removeprefix("sensor_")
-    assert (
-        datetime.strptime(doc["start_utc"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d_%H%M%S")
-        == im_namen
-    )
     start = datetime.strptime(doc["start_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    assert start.astimezone().strftime("%Y-%m-%d_%H%M%S") == im_namen  # Name in Ortszeit
     assert doc["datum"] == start.astimezone().strftime("%Y-%m-%d")  # Ortsdatum, Vertrag §7
 
 
@@ -537,7 +561,7 @@ def test_journal_backup_round_trip_mit_ppi_halber_zeile_und_altem_backup(tmp_pat
     a.schlag(820, 73, START_MONO + 25, "m")
     a.ppi_paket(START_MONO + 26, [820], [4], [0], [1])
     kopf = a.backup(tmp_path)
-    journal = tmp_path / ".backup_2026-10-12_080000.jsonl"
+    journal = tmp_path / a.journal_name()
     # Eine halbe Zeile am Ende (Absturz mitten im Schreiben) — der nächste Anhang beginnt
     # mit einem Umbruch, das Lesen überspringt sie
     with open(journal, "a", encoding="utf-8") as f:

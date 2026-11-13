@@ -134,7 +134,10 @@ def test_geschriebene_datei_hat_alle_pflichtfelder(tmp_path: Path) -> None:
     )
     pfad = speichern(rec, tmp_path)
 
-    assert pfad.name == "sensor_2026-08-06_081500.json"
+    # Zeitstempel in Ortszeit (`recording.dateistempel`); die feste Zone prüft test_hrv_aufnahme
+    assert (
+        pfad.name == rec.dateiname() == f"sensor_{rec.start_utc.astimezone():%Y-%m-%d_%H%M%S}.json"
+    )
     assert ist_messdatei(pfad)
 
     doc = json.loads(pfad.read_text(encoding="utf-8"))

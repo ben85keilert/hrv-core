@@ -11,7 +11,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import Any
 
@@ -461,23 +461,56 @@ def messordner(basis: Path | str, geraeteordner: str, *, simulation: bool = Fals
     return Path(basis) / "Messungen" / (GENERATOR_ORDNER if simulation else geraeteordner)
 
 
-def messdatei_name(start_utc: datetime | None) -> str:
-    """``sensor_<UTC-Start>.json`` — der Name einer Messdatei, schon während der Aufnahme.
+def dateistempel(start: datetime | None = None, *, zone: tzinfo | None = None) -> str:
+    """``JJJJ-MM-TT_HHMMSS`` in **Ortszeit** — der Zeitstempel in Dateinamen.
 
-    >>> messdatei_name(datetime(2026, 10, 17, 8, 5, 3, 250000, tzinfo=UTC))
-    'sensor_2026-10-17_080503.json'
+    Eine Quelle für Messdatei (`messdatei_name`), Crash-Backup (`aufnahme.Aufnahme.backup_name`),
+    die Streckendatei der trainingsapp (`data.strecken.dateiname`) und die Schreiber von
+    praxis_gui, damit Dateien desselben Trainings dieselbe Uhr im Namen tragen (Ben,
+    13.11.2026 — vorher Messung UTC, Strecke Ortszeit). Der Name ist für den Menschen; die
+    genaue Zeit steht in ``start_utc`` in der Datei. Ortszeit ist die Zone des Geräts im
+    Augenblick des Benennens (``zone=None``); eine Zeit ohne Zone gilt als UTC.
+
+    Folgen der Ortszeit: In der doppelten Stunde am Ende der Sommerzeit können zwei Starts
+    denselben Namen ergeben — `freier_pfad` hängt dann einen Zähler an; und die Namen sortieren
+    über diese Stunde hinweg nicht streng nach der Zeit. Dateien von vor der Umstellung
+    behalten ihren UTC-Namen (`docs/formate.md`).
+
+    >>> t = datetime(2026, 10, 17, 8, 5, 3, 250000, tzinfo=UTC)
+    >>> from datetime import timedelta, timezone
+    >>> dateistempel(t, zone=timezone(timedelta(hours=2)))
+    '2026-10-17_100503'
+    >>> dateistempel(t.replace(tzinfo=None), zone=UTC)
+    '2026-10-17_080503'
+    >>> dateistempel(t) == t.astimezone().strftime("%Y-%m-%d_%H%M%S")
+    True
     """
-    ts = (start_utc or datetime.now(UTC)).strftime("%Y-%m-%d_%H%M%S")
-    return f"sensor_{ts}.json"
+    t = start or datetime.now(UTC)
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=UTC)
+    return t.astimezone(zone).strftime("%Y-%m-%d_%H%M%S")
+
+
+def messdatei_name(start_utc: datetime | None, *, zone: tzinfo | None = None) -> str:
+    """``sensor_<Start in Ortszeit>.json`` — der Name einer Messdatei, schon während der Aufnahme.
+
+    Zeitstempel: `dateistempel` (Ortszeit seit 13.11.2026, vorher UTC).
+
+    >>> from datetime import timedelta, timezone
+    >>> start = datetime(2026, 10, 17, 8, 5, 3, 250000, tzinfo=UTC)
+    >>> messdatei_name(start, zone=timezone(timedelta(hours=2)))
+    'sensor_2026-10-17_100503.json'
+    """
+    return f"sensor_{dateistempel(start_utc, zone=zone)}.json"
 
 
 def freier_pfad(ordner: Path | str, dateiname: str) -> Path:
     """Ein Pfad, an dem noch keine Datei liegt: ``name.json``, ``name_1.json``, ``name_2.json`` …
 
     Wie praxis_gui (`_save_recording`): Zwei Aufnahmen mit derselben
-    UTC-Startsekunde im selben Ordner (Simulator, zweiter Start nach einem
-    Fehler) überschrieben sonst still die erste (Befund F10). `ist_messdatei`
-    erkennt den Zählernamen.
+    Startsekunde im selben Ordner (Simulator, zweiter Start nach einem
+    Fehler, doppelte Stunde am Ende der Sommerzeit) überschrieben sonst
+    still die erste (Befund F10). `ist_messdatei` erkennt den Zählernamen.
 
     >>> import tempfile
     >>> with tempfile.TemporaryDirectory() as d:
@@ -520,6 +553,7 @@ __all__ = [
     "Beat",
     "FormatFehler",
     "Recording",
+    "dateistempel",
     "freier_pfad",
     "ist_messdatei",
     "json_atomar_schreiben",
